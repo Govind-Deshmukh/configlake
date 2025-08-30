@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Security Settings - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Security Settings - {{ project.name }}</h2>
+                <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Project
+                </a>
+            </div>
+
+            <!-- IP Whitelist -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">IP Address Whitelist</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Control which IP addresses can access this project's API endpoints. 
+                        Leave empty to allow access from any IP address.
+                    </p>
+
+                    <!-- Add IP Form -->
+                    <form method="POST" action="{{ url_for('projects.add_allowed_ip', project_id=project.id) }}" class="mb-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="ip_address" class="form-label">IP Address, Range, or FQDN</label>
+                                    <input type="text" class="form-control" id="ip_address" name="ip_address" 
+                                           placeholder="192.168.1.1, 192.168.1.0/24, or api.example.com" required>
+                                    <div class="form-text">Single IP, CIDR notation, or fully qualified domain name</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Description</label>
+                                    <input type="text" class="form-control" id="description" name="description" 
+                                           placeholder="Office network, Home IP, etc.">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-plus"></i> Add IP
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Current IPs -->
+                    {% if allowed_ips %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>IP Address/Range</th>
+                                        <th>Description</th>
+                                        <th>Added</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ip in allowed_ips %}
+                                    <tr>
+                                        <td>
+                                            <code>{{ ip.ip_address }}</code>
+                                        </td>
+                                        <td>
+                                            {{ ip.description or '-' }}
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ ip.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <form method="POST" action="{{ url_for('projects.remove_allowed_ip', project_id=project.id, ip_id=ip.id) }}" style="display: inline;">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                        onclick="return confirm('Remove IP {{ ip.ip_address }}?')">
+                                                    <i class="fas fa-trash"></i> Remove
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No IP restrictions configured.</p>
+                            <p class="text-muted small">API access is allowed from any IP address.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-4">
+            <!-- Security Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Security Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6><i class="fas fa-key text-primary me-2"></i>API Access</h6>
+                        <ul class="small text-muted">
+                            <li>All API endpoints require Bearer token authentication</li>
+                            <li>Tokens are scoped to specific projects and environments</li>
+                            <li>IP whitelist applies to all API requests</li>
+                            <li>Failed authentication attempts are logged</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h6><i class="fas fa-lock text-success me-2"></i>Data Protection</h6>
+                        <ul class="small text-muted">
+                            <li>Secrets are encrypted using environment-specific keys</li>
+                            <li>Encryption uses Fernet (AES 128 in CBC mode)</li>
+                            <li>Keys are generated cryptographically secure</li>
+                            <li>Configurations are stored in plain text for performance</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Best Practices:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Use specific IP addresses or small ranges instead of broad networks</li>
+                            <li>Use FQDNs for dynamic IP addresses (e.g., api.example.com)</li>
+                            <li>Regularly review and remove unused IP addresses and FQDNs</li>
+                            <li>Set API token expiration dates appropriately</li>
+                            <li>Monitor access logs for suspicious activity</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

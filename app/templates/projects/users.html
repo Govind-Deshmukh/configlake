@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Manage Users - {{ project.name }}</h2>
+                <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Project
+                </a>
+            </div>
+
+            <!-- Add User Form -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Add User to Project</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('projects.add_user', project_id=project.id) }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="user_id" class="form-label">Select User</label>
+                                    <select class="form-select" id="user_id" name="user_id" required>
+                                        <option value="">Choose a user...</option>
+                                        {% for user in all_users %}
+                                            {% set already_in_project = project_users | selectattr('user_id', 'equalto', user.id) | list | length > 0 %}
+                                            {% if not already_in_project %}
+                                                <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="role" class="form-label">Role</label>
+                                    <select class="form-select" id="role" name="role" required>
+                                        <option value="reader">Reader</option>
+                                        <option value="maintainer">Maintainer</option>
+                                        <option value="owner">Owner</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-plus"></i> Add User
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Current Users -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Project Members</h5>
+                </div>
+                <div class="card-body">
+                    {% if project_users %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Added</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for project_user in project_users %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar me-3">
+                                                    <span class="avatar-initial rounded-circle bg-primary">
+                                                        {{ project_user.user.username[0]|upper }}
+                                                    </span>
+                                                </div>
+                                                <strong>{{ project_user.user.username }}</strong>
+                                                {% if project_user.user.is_admin %}
+                                                    <span class="badge bg-warning ms-2">Admin</span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td>{{ project_user.user.email }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if project_user.role == 'owner' %}success{% elif project_user.role == 'maintainer' %}primary{% else %}secondary{% endif %}">
+                                                {{ project_user.role|title }}
+                                            </span>
+                                        </td>
+                                        <td>{{ project_user.created_at.strftime('%Y-%m-%d') }}</td>
+                                        <td>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                    Actions
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <a class="dropdown-item{% if project_user.role == 'owner' %} active{% endif %}" href="#" onclick="changeRole({{ project_user.user.id }}, 'owner')">
+                                                            <i class="fas fa-crown text-warning me-2"></i> 
+                                                            {% if project_user.role == 'owner' %}✓ {% endif %}Owner
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item{% if project_user.role == 'maintainer' %} active{% endif %}" href="#" onclick="changeRole({{ project_user.user.id }}, 'maintainer')">
+                                                            <i class="fas fa-wrench text-primary me-2"></i> 
+                                                            {% if project_user.role == 'maintainer' %}✓ {% endif %}Maintainer
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item{% if project_user.role == 'reader' %} active{% endif %}" href="#" onclick="changeRole({{ project_user.user.id }}, 'reader')">
+                                                            <i class="fas fa-eye text-info me-2"></i> 
+                                                            {% if project_user.role == 'reader' %}✓ {% endif %}Reader
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="#" onclick="removeUser({{ project_user.user.id }}, '{{ project_user.user.username }}')">
+                                                            <i class="fas fa-trash me-2"></i> Remove User
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No users in this project yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-lg-4">
+            <!-- Role Permissions Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Role Permissions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <div class="text-center">
+                            <i class="fas fa-crown fa-2x text-warning mb-2"></i>
+                            <h6>Owner</h6>
+                            <ul class="list-unstyled small text-muted">
+                                <li>✓ Full project control</li>
+                                <li>✓ Manage users and roles</li>
+                                <li>✓ Create/delete environments</li>
+                                <li>✓ Security settings</li>
+                                <li>✓ Generate API tokens</li>
+                                <li>✓ Backup and restore</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <div class="text-center">
+                            <i class="fas fa-wrench fa-2x text-primary mb-2"></i>
+                            <h6>Maintainer</h6>
+                            <ul class="list-unstyled small text-muted">
+                                <li>✓ Create/update/delete configs</li>
+                                <li>✓ Create/update/delete secrets</li>
+                                <li>✓ View all project data</li>
+                                <li>✗ Cannot manage users</li>
+                                <li>✗ Cannot manage security</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-center">
+                            <i class="fas fa-eye fa-2x text-info mb-2"></i>
+                            <h6>Reader</h6>
+                            <ul class="list-unstyled small text-muted">
+                                <li>✓ View configurations</li>
+                                <li>✓ View secrets</li>
+                                <li>✓ Use API tokens</li>
+                                <li>✗ Cannot make changes</li>
+                                <li>✗ Cannot manage anything</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove User Modal -->
+<div class="modal fade" id="removeUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remove User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to remove <strong id="removeUsername"></strong> from this project?</p>
+                <p class="text-muted small">This user will lose access to all configurations and secrets in this project.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="removeUserForm" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Remove User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Change Role Modal -->
+<div class="modal fade" id="changeRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Change User Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Change role to <strong id="newRoleName"></strong>?</p>
+                <p class="text-muted small" id="roleDescription"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="changeRoleForm" style="display: inline;">
+                    <input type="hidden" name="role" id="newRole">
+                    <button type="submit" class="btn btn-primary">Change Role</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function removeUser(userId, username) {
+    document.getElementById('removeUsername').textContent = username;
+    document.getElementById('removeUserForm').action = "{{ url_for('projects.remove_user', project_id=project.id, user_id=999999) }}".replace('999999', userId);
+    new bootstrap.Modal(document.getElementById('removeUserModal')).show();
+}
+
+function changeRole(userId, newRole) {
+    const roleDescriptions = {
+        'owner': 'This user will have full control over the project including user management and security settings.',
+        'maintainer': 'This user can create, update, and delete configurations and secrets but cannot manage users.',
+        'reader': 'This user can only view configurations and secrets but cannot make any changes.'
+    };
+    
+    document.getElementById('newRoleName').textContent = newRole.charAt(0).toUpperCase() + newRole.slice(1);
+    document.getElementById('newRole').value = newRole;
+    document.getElementById('roleDescription').textContent = roleDescriptions[newRole];
+    document.getElementById('changeRoleForm').action = "{{ url_for('projects.change_user_role', project_id=project.id, user_id=999999) }}".replace('999999', userId);
+    new bootstrap.Modal(document.getElementById('changeRoleModal')).show();
+}
+</script>
+
+<style>
+.avatar {
+    width: 40px;
+    height: 40px;
+}
+
+.avatar-initial {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.dropdown-item.active {
+    background-color: #e9ecef;
+    font-weight: 600;
+}
+
+.dropdown-item.active:hover {
+    background-color: #e9ecef;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - ConfigLake{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>{{ project.name }}</h1>
+        <p class="text-muted">{{ project.description or 'No description' }}</p>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}">Projects</a></li>
+                <li class="breadcrumb-item active">{{ project.name }}</li>
+            </ol>
+        </nav>
+    </div>
+    <div class="col-md-4 text-end">
+        {% if g.user_role == 'owner' %}
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="bi bi-gear"></i> Manage
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="{{ url_for('projects.create_environment', project_id=project.id) }}">
+                    <i class="bi bi-plus"></i> Add Environment
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('projects.manage_users', project_id=project.id) }}">
+                    <i class="bi bi-people"></i> Manage Users
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('projects.manage_security', project_id=project.id) }}">
+                    <i class="bi bi-shield-check"></i> Security Settings
+                </a></li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-layers"></i> Environments</h5>
+                {% if g.user_role == 'owner' %}
+                <a href="{{ url_for('projects.create_environment', project_id=project.id) }}" 
+                   class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> New Environment
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if environments %}
+                    <div class="row">
+                        {% for environment in environments %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-box"></i> {{ environment.name }}
+                                    </h6>
+                                    <p class="text-muted small">
+                                        Created {{ environment.created_at.strftime('%Y-%m-%d') }}
+                                    </p>
+                                </div>
+                                <div class="card-footer">
+                                    <a href="{{ url_for('projects.view_environment', project_id=project.id, environment_id=environment.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-box" style="font-size: 3rem; color: #dee2e6;"></i>
+                        <h5 class="mt-3 text-muted">No Environments</h5>
+                        <p class="text-muted">Create environments to organize your configurations.</p>
+                        {% if g.user_role == 'owner' %}
+                        <a href="{{ url_for('projects.create_environment', project_id=project.id) }}" 
+                           class="btn btn-primary">
+                            <i class="bi bi-plus"></i> Create Environment
+                        </a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

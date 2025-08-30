@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Create Project - ConfigLake{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>Create New Project</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}">Projects</a></li>
+                <li class="breadcrumb-item active">Create</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Project Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="Enter project name">
+                        <div class="form-text">Choose a unique name for your project.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Optional project description"></textarea>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus"></i> Create Project
+                        </button>
+                        <a href="{{ url_for('projects.list_projects') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Project Info</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><i class="bi bi-check text-success"></i> Secure configuration management</li>
+                    <li><i class="bi bi-check text-success"></i> Environment-specific secrets</li>
+                    <li><i class="bi bi-check text-success"></i> Role-based access control</li>
+                    <li><i class="bi bi-check text-success"></i> IP whitelisting</li>
+                    <li><i class="bi bi-check text-success"></i> API token access</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

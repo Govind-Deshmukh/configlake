@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ConfigLake{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>Dashboard</h1>
+        <p class="text-muted">Welcome to your Config & Secret Manager dashboard.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
+            <i class="bi bi-plus"></i> New Project
+        </a>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-folder"></i> Your Projects</h5>
+            </div>
+            <div class="card-body">
+                {% if projects %}
+                    <div class="row">
+                        {% for project in projects %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ project.name }}</h6>
+                                    <p class="card-text text-muted">{{ project.description or 'No description' }}</p>
+                                    <p class="text-muted small">
+                                        <i class="bi bi-calendar"></i> Created {{ project.created_at.strftime('%Y-%m-%d') }}
+                                    </p>
+                                </div>
+                                <div class="card-footer">
+                                    <a href="{{ url_for('projects.view_project', project_id=project.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-folder-x" style="font-size: 3rem; color: #dee2e6;"></i>
+                        <h5 class="mt-3 text-muted">No Projects Found</h5>
+                        <p class="text-muted">Get started by creating your first project.</p>
+                        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
+                            <i class="bi bi-plus"></i> Create Project
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

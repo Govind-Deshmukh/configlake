@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}System Users - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>System Users</h2>
+                    <p class="text-muted">Manage all users in the Config Lake system</p>
+                </div>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+
+            <!-- System Stats -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">Total Users</h5>
+                                    <h2 class="mb-0">{{ user_stats|length }}</h2>
+                                </div>
+                                <i class="fas fa-users fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">Admin Users</h5>
+                                    <h2 class="mb-0">{{ user_stats | selectattr('user.is_admin', 'equalto', true) | list | length }}</h2>
+                                </div>
+                                <i class="fas fa-user-shield fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">Active Users</h5>
+                                    <h2 class="mb-0">{{ user_stats | selectattr('project_count', 'greaterthan', 0) | list | length }}</h2>
+                                </div>
+                                <i class="fas fa-user-check fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title">Project Owners</h5>
+                                    <h2 class="mb-0">{{ user_stats | selectattr('owned_projects', 'greaterthan', 0) | list | length }}</h2>
+                                </div>
+                                <i class="fas fa-crown fa-2x opacity-75"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">All System Users</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Projects</th>
+                                    <th>Owned</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in user_stats %}
+                                {% set user = stat.user %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar me-3">
+                                                <span class="avatar-initial rounded-circle bg-{% if user.is_admin %}warning{% else %}primary{% endif %}">
+                                                    {{ user.username[0]|upper }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <strong>{{ user.username }}</strong>
+                                                {% if user.id == current_user.id %}
+                                                    <span class="badge bg-info ms-1">You</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ user.email }}</td>
+                                    <td>
+                                        {% if user.is_admin %}
+                                            <span class="badge bg-warning">System Admin</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Regular User</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ stat.project_count }} projects</span>
+                                    </td>
+                                    <td>
+                                        {% if stat.owned_projects > 0 %}
+                                            <span class="badge bg-success">{{ stat.owned_projects }} owned</span>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if user.id != current_user.id %}
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                    Actions
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <form method="POST" action="{{ url_for('main.toggle_admin', user_id=user.id) }}" style="display: inline;">
+                                                            <button type="submit" class="dropdown-item">
+                                                                {% if user.is_admin %}
+                                                                    <i class="fas fa-user-minus text-warning me-2"></i> Revoke Admin
+                                                                {% else %}
+                                                                    <i class="fas fa-user-shield text-success me-2"></i> Make Admin
+                                                                {% endif %}
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="#" onclick="deleteUser({{ user.id }}, '{{ user.username }}', {{ stat.owned_projects }})">
+                                                            <i class="fas fa-trash me-2"></i> Delete User
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management Guide -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">User Management Guide</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-user-shield text-warning me-2"></i>System Admin</h6>
+                            <ul class="small text-muted">
+                                <li>Can manage all users system-wide</li>
+                                <li>Can view and access all projects</li>
+                                <li>Can create/delete projects without restrictions</li>
+                                <li>Can grant/revoke admin privileges</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-user text-secondary me-2"></i>Regular User</h6>
+                            <ul class="small text-muted">
+                                <li>Can only access projects they're assigned to</li>
+                                <li>Cannot manage other users system-wide</li>
+                                <li>Can be Owner/Maintainer/Reader in projects</li>
+                                <li>Can create new projects (becomes owner)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete User Modal -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                <p>Are you sure you want to delete user <strong id="deleteUsername"></strong>?</p>
+                <div id="deleteWarning" class="alert alert-warning" style="display: none;">
+                    <i class="fas fa-crown me-2"></i>
+                    This user owns projects. Make sure to transfer ownership before deletion.
+                </div>
+                <p class="text-muted small">All project memberships will be removed, but the projects themselves will remain intact (unless they're the sole owner).</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" id="deleteUserForm" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i> Delete User
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteUser(userId, username, ownedProjects) {
+    document.getElementById('deleteUsername').textContent = username;
+    document.getElementById('deleteUserForm').action = "{{ url_for('main.delete_user', user_id='USER_ID') }}".replace('USER_ID', userId);
+    
+    const warningDiv = document.getElementById('deleteWarning');
+    if (ownedProjects > 0) {
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
+    }
+    
+    new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+}
+</script>
+
+<style>
+.avatar {
+    width: 40px;
+    height: 40px;
+}
+
+.avatar-initial {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.opacity-75 {
+    opacity: 0.75;
+}
+</style>
+{% endblock %}

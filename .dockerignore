@@ -1,0 +1,79 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation and development files
+README.md
+CONTRIBUTORS.md
+LICENSE
+*.md
+
+# Database files (will be mounted as volumes)
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# Node.js (for packages)
+node_modules/
+packages/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Backup files
+backups/
+*.backup
+
+# Development scripts
+setup.py

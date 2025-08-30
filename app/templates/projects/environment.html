@@ -1,0 +1,538 @@
+{% extends "base.html" %}
+
+{% block title %}{{ environment.name }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>{{ environment.name }}</h1>
+        <p class="text-muted">Environment in {{ project.name }}</p>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}">Projects</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', project_id=project.id) }}">{{ project.name }}</a></li>
+                <li class="breadcrumb-item active">{{ environment.name }}</li>
+            </ol>
+        </nav>
+    </div>
+    <div class="col-md-4 text-end">
+        {% if g.user_role in ['owner', 'maintainer'] %}
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addConfigModal">
+                <i class="bi bi-plus"></i> Add Config
+            </button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addSecretModal">
+                <i class="bi bi-plus"></i> Add Secret
+            </button>
+            {% if g.user_role == 'owner' %}
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#manageIpsModal">
+                <i class="bi bi-shield-check"></i> Manage IPs
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Configurations Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear"></i> Configurations</h5>
+            </div>
+            <div class="card-body">
+                {% if configs %}
+                    {% for config in configs %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                        <div>
+                            <strong>{{ config.key }}</strong><br>
+                            <small class="text-muted">{{ config.value[:50] }}{% if config.value|length > 50 %}...{% endif %}</small>
+                        </div>
+                        {% if g.user_role in ['owner', 'maintainer'] %}
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary btn-sm" onclick="editConfig('{{ config.key }}', '{{ config.value }}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('projects.delete_config', project_id=project.id, environment_id=environment.id, config_key=config.key) }}" class="d-inline">
+                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this configuration?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No configurations defined.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Secrets Section -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Secrets</h5>
+            </div>
+            <div class="card-body">
+                {% if secrets %}
+                    {% for secret in secrets %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                        <div>
+                            <strong>{{ secret.key }}</strong><br>
+                            <small class="text-muted">••••••••••••••••</small>
+                        </div>
+                        {% if g.user_role in ['owner', 'maintainer'] %}
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary btn-sm" onclick="editSecret('{{ secret.key }}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('projects.delete_secret', project_id=project.id, environment_id=environment.id, secret_key=secret.key) }}" class="d-inline">
+                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this secret?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">No secrets defined.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- API Tokens Section -->
+{% if g.user_role == 'owner' %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-key"></i> API Tokens</h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createTokenModal">
+                    <i class="bi bi-plus"></i> Create Token
+                </button>
+            </div>
+            <div class="card-body">
+                {% if api_tokens %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created</th>
+                                    <th>Expires</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for token in api_tokens %}
+                                <tr>
+                                    <td>{{ token.name }}</td>
+                                    <td>{{ token.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ token.expires_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if token.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-warning btn-sm" onclick="toggleToken({{ token.id }}, {{ token.is_active|lower }})">
+                                                {% if token.is_active %}
+                                                    <i class="bi bi-pause"></i> Deactivate
+                                                {% else %}
+                                                    <i class="bi bi-play"></i> Activate
+                                                {% endif %}
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm" onclick="revokeToken({{ token.id }}, '{{ token.name }}')">
+                                                <i class="bi bi-trash"></i> Revoke
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No API tokens created.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modals -->
+{% if g.user_role in ['owner', 'maintainer'] %}
+<!-- Add Config Modal -->
+<div class="modal fade" id="addConfigModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="configForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="configKey" class="form-label">Key</label>
+                        <input type="text" class="form-control" id="configKey" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="configValue" class="form-label">Value</label>
+                        <textarea class="form-control" id="configValue" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Secret Modal -->
+<div class="modal fade" id="addSecretModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Secret</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="secretForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="secretKey" class="form-label">Key</label>
+                        <input type="text" class="form-control" id="secretKey" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="secretValue" class="form-label">Value</label>
+                        <input type="password" class="form-control" id="secretValue" required>
+                        <div class="form-text">This value will be encrypted and stored securely.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Secret</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if g.user_role == 'owner' %}
+<!-- Create Token Modal -->
+<div class="modal fade" id="createTokenModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create API Token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="tokenForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="tokenName" class="form-label">Token Name</label>
+                        <input type="text" class="form-control" id="tokenName" required
+                               placeholder="e.g. Production API Token">
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> The token will be shown only once after creation. Make sure to copy it.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Token</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Manage IPs Modal -->
+<div class="modal fade" id="manageIpsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage IP Whitelist - {{ environment.name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Add New IP</h6>
+                        <form id="addIpForm">
+                            <div class="mb-3">
+                                <label for="ipAddress" class="form-label">IP Address or FQDN</label>
+                                <input type="text" class="form-control" id="ipAddress" required
+                                       placeholder="192.168.1.100, 192.168.1.0/24, or api.example.com">
+                                <div class="form-text">Single IP, CIDR range, or fully qualified domain name</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="ipDescription" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="ipDescription" 
+                                       placeholder="e.g. Office network">
+                            </div>
+                            <button type="submit" class="btn btn-warning btn-sm">Add IP</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Current Whitelist</h6>
+                        <div id="currentIps">
+                            <div class="text-muted">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>Environment-specific IPs:</strong> These IPs will only allow access to this specific environment. 
+                    Project-wide IPs are managed from the project settings.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Handle config form submission
+document.getElementById('configForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const key = document.getElementById('configKey').value;
+    const value = document.getElementById('configValue').value;
+    
+    try {
+        const response = await fetch(`/api/manage/config/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ key, value })
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to save configuration');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+// Handle secret form submission
+document.getElementById('secretForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const key = document.getElementById('secretKey').value;
+    const value = document.getElementById('secretValue').value;
+    
+    try {
+        const response = await fetch(`/api/manage/secret/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ key, value })
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to save secret');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+// Handle token form submission
+document.getElementById('tokenForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('tokenName').value;
+    
+    try {
+        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            alert('Token created successfully!\n\nToken: ' + data.token + '\n\nThis will only be shown once. Copy it now!');
+            location.reload();
+        } else {
+            alert('Failed to create token: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+function editConfig(key, value) {
+    document.getElementById('configKey').value = key;
+    document.getElementById('configValue').value = value;
+    new bootstrap.Modal(document.getElementById('addConfigModal')).show();
+}
+
+function editSecret(key) {
+    document.getElementById('secretKey').value = key;
+    document.getElementById('secretValue').value = '';
+    new bootstrap.Modal(document.getElementById('addSecretModal')).show();
+}
+
+// IP Management Functions
+document.getElementById('addIpForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const ipAddress = document.getElementById('ipAddress').value;
+    const description = document.getElementById('ipDescription').value;
+    
+    try {
+        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                ip_address: ipAddress,
+                description: description || ''
+            })
+        });
+        
+        if (response.ok) {
+            loadCurrentIps();
+            document.getElementById('addIpForm').reset();
+            alert('IP added successfully!');
+        } else {
+            alert('Failed to add IP');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function loadCurrentIps() {
+    try {
+        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ips`);
+        const data = await response.json();
+        
+        const container = document.getElementById('currentIps');
+        
+        if (data.ips && data.ips.length > 0) {
+            container.innerHTML = data.ips.map(ip => `
+                <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                    <div>
+                        <strong>${ip.ip_address}</strong><br>
+                        <small class="text-muted">${ip.description || 'No description'}</small>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" onclick="removeIp(${ip.id})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div class="text-muted">No environment-specific IPs configured.</div>';
+        }
+    } catch (error) {
+        document.getElementById('currentIps').innerHTML = '<div class="text-danger">Failed to load IPs</div>';
+    }
+}
+
+async function removeIp(ipId) {
+    if (!confirm('Remove this IP from the whitelist?')) return;
+    
+    try {
+        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip/${ipId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadCurrentIps();
+            alert('IP removed successfully!');
+        } else {
+            alert('Failed to remove IP');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Load IPs when the modal is opened
+document.getElementById('manageIpsModal')?.addEventListener('show.bs.modal', function() {
+    loadCurrentIps();
+});
+
+// Token Management Functions
+async function toggleToken(tokenId, isActive) {
+    const action = isActive ? 'deactivate' : 'activate';
+    
+    if (!confirm(`Are you sure you want to ${action} this API token?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (response.ok) {
+            alert(`Token ${action}d successfully!`);
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert(`Failed to ${action} token: ${data.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function revokeToken(tokenId, tokenName) {
+    if (!confirm(`Are you sure you want to revoke the API token "${tokenName}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            alert('Token revoked successfully!');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert(`Failed to revoke token: ${data.error}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+</script>
+{% endblock %}
