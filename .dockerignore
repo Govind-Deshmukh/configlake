@@ -75,5 +75,3 @@ temp/
 backups/
 *.backup
 
-# Development scripts
-setup.py

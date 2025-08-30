@@ -312,57 +312,6 @@
 
 {% block scripts %}
 <script>
-// Handle config form submission
-document.getElementById('configForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const key = document.getElementById('configKey').value;
-    const value = document.getElementById('configValue').value;
-    
-    try {
-        const response = await fetch(`/api/manage/config/{{ project.id }}/{{ environment.name }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ key, value })
-        });
-        
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to save configuration');
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
-
-// Handle secret form submission
-document.getElementById('secretForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const key = document.getElementById('secretKey').value;
-    const value = document.getElementById('secretValue').value;
-    
-    try {
-        const response = await fetch(`/api/manage/secret/{{ project.id }}/{{ environment.name }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ key, value })
-        });
-        
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to save secret');
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
 
 // Handle token form submission
 document.getElementById('tokenForm')?.addEventListener('submit', async function(e) {
@@ -534,5 +483,87 @@ async function revokeToken(tokenId, tokenName) {
         alert(`Error: ${error.message}`);
     }
 }
+
+// Edit configuration function
+function editConfig(key, value) {
+    document.getElementById('configKey').value = key;
+    document.getElementById('configValue').value = value;
+    new bootstrap.Modal(document.getElementById('addConfigModal')).show();
+}
+
+// Edit secret function
+function editSecret(key) {
+    document.getElementById('secretKey').value = key;
+    document.getElementById('secretValue').value = '';
+    document.getElementById('secretValue').placeholder = 'Enter new value (leave blank to keep current)';
+    new bootstrap.Modal(document.getElementById('addSecretModal')).show();
+}
+
+// Improve form submission to close modals and reset forms
+document.getElementById('configForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const key = document.getElementById('configKey').value;
+    const value = document.getElementById('configValue').value;
+    
+    try {
+        const response = await fetch(`/api/manage/config/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ key, value })
+        });
+        
+        if (response.ok) {
+            // Close modal and reset form
+            bootstrap.Modal.getInstance(document.getElementById('addConfigModal')).hide();
+            this.reset();
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+// Override the existing secret form handler with better UX
+document.getElementById('secretForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const key = document.getElementById('secretKey').value;
+    const value = document.getElementById('secretValue').value;
+    
+    // Skip if value is empty and this is an edit (placeholder indicates edit mode)
+    if (!value && document.getElementById('secretValue').placeholder.includes('leave blank')) {
+        alert('Please enter a new value for the secret');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/manage/secret/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ key, value })
+        });
+        
+        if (response.ok) {
+            // Close modal and reset form
+            bootstrap.Modal.getInstance(document.getElementById('addSecretModal')).hide();
+            this.reset();
+            document.getElementById('secretValue').placeholder = 'This value will be encrypted and stored securely.';
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert('Failed to save secret: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
 </script>
 {% endblock %}

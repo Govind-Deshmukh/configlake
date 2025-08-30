@@ -13,7 +13,7 @@ def init_database():
     """Initialize the database."""
     print("Initializing database...")
     db.create_all()
-    print("✅ Database initialized!")
+    print("Database initialized!")
 
 def create_admin_user():
     """Create an admin user."""
@@ -59,7 +59,7 @@ def create_admin_user():
     db.session.add(admin_user)
     db.session.commit()
     
-    print(f"✅ Admin user '{username}' created successfully!")
+    print(f"Admin user '{username}' created successfully!")
     print(f"📧 Email: {email}")
     print("🔐 You can now login with these credentials")
     return True

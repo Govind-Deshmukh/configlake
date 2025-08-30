@@ -122,6 +122,18 @@ def view_environment(project_id, environment_id):
         is_active=True
     ).all()
     
+    # Debug output
+    print(f"DEBUG: Environment ID: {environment_id}")
+    print(f"DEBUG: Configs found: {len(configs)}")
+    print(f"DEBUG: Secrets found: {len(secrets)}")
+    if configs:
+        for config in configs:
+            print(f"DEBUG: Config - {config.key}: {config.value}")
+    if secrets:
+        for secret in secrets:
+            print(f"DEBUG: Secret - {secret.key}")
+    print(f"DEBUG: API tokens: {len(api_tokens)}")
+    
     # Get environment-specific allowed IPs (backward compatible)
     environment_ips = []
     try:

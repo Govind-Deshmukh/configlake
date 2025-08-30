@@ -32,6 +32,9 @@ COPY . .
 # Create directories for data persistence
 RUN mkdir -p /app/instance /app/backups
 
+# Make startup script executable
+RUN chmod +x startup.sh
+
 # Create non-root user for security
 RUN useradd -m -u 1000 configlake && \
     chown -R configlake:configlake /app
@@ -44,5 +47,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:5000/ || exit 1
 
-# Default command
-CMD ["python", "app.py"]
+# Default command - run startup script
+CMD ["./startup.sh"]

@@ -234,7 +234,7 @@
 <script>
 function deleteUser(userId, username, ownedProjects) {
     document.getElementById('deleteUsername').textContent = username;
-    document.getElementById('deleteUserForm').action = "{{ url_for('main.delete_user', user_id='USER_ID') }}".replace('USER_ID', userId);
+    document.getElementById('deleteUserForm').action = "{{ url_for('main.delete_user', user_id=0) }}".replace('0', userId);
     
     const warningDiv = document.getElementById('deleteWarning');
     if (ownedProjects > 0) {
