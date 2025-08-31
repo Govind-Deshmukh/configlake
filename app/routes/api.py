@@ -88,8 +88,15 @@ def get_all(project_id, environment_name):
         config_data[config.key] = config.value
     
     secret_data = {}
+    encryption_manager = EncryptionManager()
     for secret in secrets_query:
-        secret_data[secret.key] = secret.encrypted_value
+        try:
+            # Decrypt the secret for the client since JavaScript Fernet is complex
+            decrypted_value = encryption_manager.decrypt_value(secret.encrypted_value, environment.secret_key)
+            secret_data[secret.key] = decrypted_value
+        except Exception as e:
+            # If decryption fails, still include the key but with an error indication
+            secret_data[secret.key] = f"[DECRYPTION_ERROR: {str(e)}]"
     
     return jsonify({
         'project_id': project_id,
