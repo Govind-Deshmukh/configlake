@@ -281,26 +281,62 @@ def add_allowed_ip(project_id):
         flash('IP address is required', 'error')
         return redirect(url_for('projects.manage_security', project_id=project_id))
     
-    # Validate IP address or FQDN format
+    # Validate IP address or FQDN format (now supports IP:port format)
     import ipaddress as ip_module
     import socket
+    import re
     
     is_fqdn = False
     
-    try:
-        # Try to validate as IP address or CIDR first
-        if '/' in ip_address:
-            ip_module.ip_network(ip_address, strict=False)
-        else:
-            ip_module.ip_address(ip_address)
-    except ValueError:
-        # If not a valid IP, check if it's a valid FQDN
+    # Check if IP has port (e.g., 127.0.0.1:3000 or localhost:3000)
+    port_pattern = r'^(.+):(\d+)$'
+    port_match = re.match(port_pattern, ip_address)
+    
+    if port_match:
+        # Extract IP/hostname and port
+        host_part = port_match.group(1)
+        port_part = port_match.group(2)
+        
+        # Validate port number
         try:
-            socket.getaddrinfo(ip_address, None)
-            is_fqdn = True
-        except socket.gaierror:
-            flash('Invalid IP address or FQDN format', 'error')
+            port_num = int(port_part)
+            if not (1 <= port_num <= 65535):
+                flash('Port number must be between 1 and 65535', 'error')
+                return redirect(url_for('projects.manage_security', project_id=project_id))
+        except ValueError:
+            flash('Invalid port number', 'error')
             return redirect(url_for('projects.manage_security', project_id=project_id))
+        
+        # Validate the host part
+        try:
+            if '/' in host_part:
+                ip_module.ip_network(host_part, strict=False)
+            else:
+                ip_module.ip_address(host_part)
+        except ValueError:
+            # Check if it's a valid hostname
+            try:
+                socket.getaddrinfo(host_part, None)
+                is_fqdn = True
+            except socket.gaierror:
+                flash('Invalid IP address or hostname in IP:port format', 'error')
+                return redirect(url_for('projects.manage_security', project_id=project_id))
+    else:
+        # Original validation logic for IP/CIDR/FQDN without port
+        try:
+            # Try to validate as IP address or CIDR first
+            if '/' in ip_address:
+                ip_module.ip_network(ip_address, strict=False)
+            else:
+                ip_module.ip_address(ip_address)
+        except ValueError:
+            # If not a valid IP, check if it's a valid FQDN
+            try:
+                socket.getaddrinfo(ip_address, None)
+                is_fqdn = True
+            except socket.gaierror:
+                flash('Invalid IP address, CIDR, hostname, or IP:port format', 'error')
+                return redirect(url_for('projects.manage_security', project_id=project_id))
     
     allowed_ip = AllowedIP(
         ip_address=ip_address,
@@ -440,25 +476,58 @@ def add_environment_ip(project_id, environment_id):
     if not ip_address:
         return jsonify({'error': 'IP address is required'}), 400
     
-    # Validate IP address or FQDN format
+    # Validate IP address or FQDN format (now supports IP:port format)
     import ipaddress as ip_module
     import socket
+    import re
     
     is_fqdn = False
     
-    try:
-        # Try to validate as IP address or CIDR first
-        if '/' in ip_address:
-            ip_module.ip_network(ip_address, strict=False)
-        else:
-            ip_module.ip_address(ip_address)
-    except ValueError:
-        # If not a valid IP, check if it's a valid FQDN
+    # Check if IP has port (e.g., 127.0.0.1:3000 or localhost:3000)
+    port_pattern = r'^(.+):(\d+)$'
+    port_match = re.match(port_pattern, ip_address)
+    
+    if port_match:
+        # Extract IP/hostname and port
+        host_part = port_match.group(1)
+        port_part = port_match.group(2)
+        
+        # Validate port number
         try:
-            socket.getaddrinfo(ip_address, None)
-            is_fqdn = True
-        except socket.gaierror:
-            return jsonify({'error': 'Invalid IP address or FQDN format'}), 400
+            port_num = int(port_part)
+            if not (1 <= port_num <= 65535):
+                return jsonify({'error': 'Port number must be between 1 and 65535'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid port number'}), 400
+        
+        # Validate the host part
+        try:
+            if '/' in host_part:
+                ip_module.ip_network(host_part, strict=False)
+            else:
+                ip_module.ip_address(host_part)
+        except ValueError:
+            # Check if it's a valid hostname
+            try:
+                socket.getaddrinfo(host_part, None)
+                is_fqdn = True
+            except socket.gaierror:
+                return jsonify({'error': 'Invalid IP address or hostname in IP:port format'}), 400
+    else:
+        # Original validation logic for IP/CIDR/FQDN without port
+        try:
+            # Try to validate as IP address or CIDR first
+            if '/' in ip_address:
+                ip_module.ip_network(ip_address, strict=False)
+            else:
+                ip_module.ip_address(ip_address)
+        except ValueError:
+            # If not a valid IP, check if it's a valid FQDN
+            try:
+                socket.getaddrinfo(ip_address, None)
+                is_fqdn = True
+            except socket.gaierror:
+                return jsonify({'error': 'Invalid IP address, CIDR, hostname, or IP:port format'}), 400
     
     allowed_ip = AllowedIP(
         ip_address=ip_address,

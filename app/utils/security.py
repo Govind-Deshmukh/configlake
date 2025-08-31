@@ -28,35 +28,76 @@ def check_ip_whitelist(project_id, environment_id=None):
         # Fallback to old behavior if column doesn't exist
         allowed_ips = query.all()
     
-    # If no IPs are configured, allow all (for development)
+    # If no IPs are configured, deny access (production behavior)
     if not allowed_ips:
-        return True
+        return False
     
     try:
         client_ip_obj = ipaddress.ip_address(client_ip)
         
         for allowed_ip in allowed_ips:
             try:
-                # Check if it's an FQDN
-                if getattr(allowed_ip, 'is_fqdn', False):
-                    # Resolve FQDN to IP addresses
-                    try:
-                        resolved_ips = socket.getaddrinfo(allowed_ip.ip_address, None)
-                        for addr_info in resolved_ips:
-                            resolved_ip = ipaddress.ip_address(addr_info[4][0])
-                            if client_ip_obj == resolved_ip:
+                # Handle IP:port format - extract just the IP part for comparison
+                import re
+                port_pattern = r'^(.+):(\d+)$'
+                port_match = re.match(port_pattern, allowed_ip.ip_address)
+                
+                if port_match:
+                    # Extract just the IP/hostname part
+                    host_part = port_match.group(1)
+                    
+                    # Check if it's an FQDN
+                    if getattr(allowed_ip, 'is_fqdn', False):
+                        try:
+                            resolved_ips = socket.getaddrinfo(host_part, None)
+                            for addr_info in resolved_ips:
+                                resolved_ip = ipaddress.ip_address(addr_info[4][0])
+                                if client_ip_obj == resolved_ip:
+                                    return True
+                        except (socket.gaierror, ValueError):
+                            continue
+                    # Check if it's a network range or single IP
+                    elif '/' in host_part:
+                        network = ipaddress.ip_network(host_part, strict=False)
+                        if client_ip_obj in network:
+                            return True
+                    else:
+                        try:
+                            allowed_ip_obj = ipaddress.ip_address(host_part)
+                            if client_ip_obj == allowed_ip_obj:
                                 return True
-                    except (socket.gaierror, ValueError):
-                        continue
-                # Check if it's a network range or single IP
-                elif '/' in allowed_ip.ip_address:
-                    network = ipaddress.ip_network(allowed_ip.ip_address, strict=False)
-                    if client_ip_obj in network:
-                        return True
+                        except ValueError:
+                            # Try as hostname
+                            try:
+                                resolved_ips = socket.getaddrinfo(host_part, None)
+                                for addr_info in resolved_ips:
+                                    resolved_ip = ipaddress.ip_address(addr_info[4][0])
+                                    if client_ip_obj == resolved_ip:
+                                        return True
+                            except (socket.gaierror, ValueError):
+                                continue
                 else:
-                    allowed_ip_obj = ipaddress.ip_address(allowed_ip.ip_address)
-                    if client_ip_obj == allowed_ip_obj:
-                        return True
+                    # Original logic for entries without port
+                    # Check if it's an FQDN
+                    if getattr(allowed_ip, 'is_fqdn', False):
+                        # Resolve FQDN to IP addresses
+                        try:
+                            resolved_ips = socket.getaddrinfo(allowed_ip.ip_address, None)
+                            for addr_info in resolved_ips:
+                                resolved_ip = ipaddress.ip_address(addr_info[4][0])
+                                if client_ip_obj == resolved_ip:
+                                    return True
+                        except (socket.gaierror, ValueError):
+                            continue
+                    # Check if it's a network range or single IP
+                    elif '/' in allowed_ip.ip_address:
+                        network = ipaddress.ip_network(allowed_ip.ip_address, strict=False)
+                        if client_ip_obj in network:
+                            return True
+                    else:
+                        allowed_ip_obj = ipaddress.ip_address(allowed_ip.ip_address)
+                        if client_ip_obj == allowed_ip_obj:
+                            return True
             except ValueError:
                 continue
         
