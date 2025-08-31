@@ -3,7 +3,7 @@ from flask_login import login_required
 from app import db
 from app.models import Project, Environment, Config, Secret, APIToken
 from app.utils.encryption import EncryptionManager
-from app.utils.security import require_api_token, require_project_permission
+from app.utils.security import require_api_token, require_project_permission, require_project_permission_with_ip
 from datetime import datetime, timedelta
 import secrets
 
@@ -431,3 +431,30 @@ def clear_environment_data(project_id, environment_name):
     db.session.commit()
     
     return jsonify({'message': 'Environment data cleared successfully'})
+
+# Test endpoint to verify IP whitelisting behavior
+@api_bp.route('/test/ip-check/<int:project_id>')
+@login_required
+@require_project_permission_with_ip('reader')
+def test_ip_check(project_id):
+    """Test endpoint that enforces IP whitelisting."""
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.remote_addr
+    return jsonify({
+        'message': 'IP check passed!',
+        'project_id': project_id,
+        'client_ip': client_ip,
+        'note': 'This endpoint enforces IP whitelisting'
+    })
+
+@api_bp.route('/test/no-ip-check/<int:project_id>')
+@login_required
+@require_project_permission('reader')
+def test_no_ip_check(project_id):
+    """Test endpoint that bypasses IP whitelisting."""
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.remote_addr
+    return jsonify({
+        'message': 'No IP check - dashboard access!',
+        'project_id': project_id,
+        'client_ip': client_ip,
+        'note': 'This endpoint bypasses IP whitelisting (for dashboard)'
+    })

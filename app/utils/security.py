@@ -65,7 +65,7 @@ def check_ip_whitelist(project_id, environment_id=None):
         return False
 
 def require_project_permission(required_role='reader'):
-    """Decorator to check if user has required permissions for a project."""
+    """Decorator to check if user has required permissions for a project (NO IP restrictions for dashboard)."""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -74,7 +74,52 @@ def require_project_permission(required_role='reader'):
             if not project_id:
                 return jsonify({'error': 'Project ID required'}), 400
             
-            # Check IP whitelist (project-wide for management interface)
+            # NO IP whitelist check for dashboard/management interfaces
+            print(f"DEBUG: Dashboard access - bypassing IP check for project {project_id}")
+            
+            # Check user permissions
+            if not current_user.is_authenticated:
+                return jsonify({'error': 'Authentication required'}), 401
+            
+            # Admin users have access to all projects
+            if current_user.is_admin:
+                g.user_role = 'owner'
+                return f(*args, **kwargs)
+            
+            project_user = ProjectUser.query.filter_by(
+                user_id=current_user.id,
+                project_id=project_id
+            ).first()
+            
+            if not project_user:
+                return jsonify({'error': 'Access denied: Not a project member'}), 403
+            
+            # Check role hierarchy: owner > maintainer > reader
+            role_hierarchy = {'owner': 3, 'maintainer': 2, 'reader': 1}
+            user_level = role_hierarchy.get(project_user.role, 0)
+            required_level = role_hierarchy.get(required_role, 0)
+            
+            if user_level < required_level:
+                return jsonify({'error': f'Access denied: {required_role} role required'}), 403
+            
+            g.user_role = project_user.role
+            return f(*args, **kwargs)
+        
+        return decorated_function
+    return decorator
+
+def require_project_permission_with_ip(required_role='reader'):
+    """Decorator to check user permissions AND IP whitelist (for client API endpoints)."""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            project_id = kwargs.get('project_id') or request.view_args.get('project_id')
+            
+            if not project_id:
+                return jsonify({'error': 'Project ID required'}), 400
+            
+            # Check IP whitelist for client API endpoints  
+            print(f"DEBUG: Client API access - checking IP whitelist for project {project_id}")
             if not check_ip_whitelist(project_id):
                 return jsonify({'error': 'Access denied: IP not whitelisted'}), 403
             
@@ -134,6 +179,7 @@ def require_api_token():
                 return jsonify({'error': 'API token expired'}), 401
             
             # Check IP whitelist for the project and environment
+            print(f"DEBUG: API Token access - checking IP whitelist for project {api_token.project_id}, env {api_token.environment_id}")
             if not check_ip_whitelist(api_token.project_id, api_token.environment_id):
                 return jsonify({'error': 'Access denied: IP not whitelisted'}), 403
             

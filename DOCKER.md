@@ -1,238 +1,474 @@
-# ConfigLake Docker Setup
+# ConfigLake Docker Guide
 
-This guide covers how to run ConfigLake using Docker.
+Complete guide for running ConfigLake using Docker - the easiest way to deploy your configuration and secrets management platform.
 
-## 🐳 Quick Start with Docker
+## What is ConfigLake?
 
-### Option 1: Using Docker Compose (Recommended)
+ConfigLake is a centralized platform for managing application configurations and secrets across different environments. With Docker, you can have it running in minutes!
+
+## Quick Start (30 seconds!)
+
+The fastest way to get ConfigLake running:
 
 ```bash
-# Clone the repository
-git clone https://github.com/Govind-Deshmukh/configlake.git
-cd configlake
+# Pull and run ConfigLake
+docker pull configlake/configlake
+docker run -d --name configlake -p 5000:5000 configlake/configlake
 
-# Start with Docker Compose
+# Create your admin user
+docker exec -it configlake python app.py create-admin
+
+# Access at http://localhost:5000
+```
+
+Done! ConfigLake is now running on your machine.
+
+## Installation Options
+
+### Option 1: Pre-built Image (Recommended)
+
+Use the official image from Docker Hub:
+
+```bash
+# Basic setup with SQLite database
+docker run -d \
+  --name configlake \
+  -p 5000:5000 \
+  -v configlake_data:/app/instance \
+  -v configlake_backups:/app/backups \
+  -e SECRET_KEY="change-this-in-production" \
+  configlake/configlake:latest
+
+# Create admin user
+docker exec -it configlake python app.py create-admin
+```
+
+### Option 2: Docker Compose (Best for Production)
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: "3.8"
+services:
+  configlake:
+    image: configlake/configlake:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - configlake_data:/app/instance
+      - configlake_backups:/app/backups
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_TYPE=sqlite
+    restart: unless-stopped
+
+volumes:
+  configlake_data:
+  configlake_backups:
+```
+
+Run with:
+
+```bash
+# Set your secret key
+export SECRET_KEY="your-super-secure-secret-key-here"
+
+# Start ConfigLake
 docker-compose up -d
 
-# Check logs
-docker-compose logs -f configlake
+# Create admin user
+docker-compose exec configlake python app.py create-admin
 ```
 
-### Option 2: Using Docker directly
+### Option 3: Build from Source
 
 ```bash
-# Build the image
-docker build -t configlake .
+# Clone and build
+git clone https://github.com/Govind-Deshmukh/configlake
+cd configlake
+docker build -t my-configlake .
 
-# Run the container
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -v configlake_data:/app/instance \
-  -v configlake_backups:/app/backups \
-  -e SECRET_KEY="your-secret-key" \
-  configlake
+# Run your custom build
+docker run -d --name configlake -p 5000:5000 my-configlake
 ```
 
-### Option 3: Using pre-built image from Docker Hub
+## First Time Setup
+
+### 1. Access ConfigLake
+
+Open your browser and go to: **http://localhost:5000**
+
+### 2. Create Admin User
 
 ```bash
-# Pull and run from Docker Hub
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -v configlake_data:/app/instance \
-  -v configlake_backups:/app/backups \
-  -e SECRET_KEY="your-secret-key" \
-  configlake/configlake:latest
+# Create your admin account
+docker exec -it configlake python app.py create-admin
+
+# Follow the prompts to enter:
+# - Username
+# - Email
+# - Password
 ```
 
-## 🌐 Access the Application
+### 3. Login and Start Using
 
-Once running, access ConfigLake at: **http://localhost:5000**
+- Login with your admin credentials
+- Create your first project
+- Add environments (development, staging, production)
+- Start adding your configuration data!
 
-## 🔧 Initial Setup
+## Database Options
 
-### 1. Create Admin User
+ConfigLake supports different databases based on your needs:
+
+### SQLite (Default - Perfect for Getting Started)
 
 ```bash
-# Enter the running container
-docker exec -it configlake bash
-
-# Run setup script
-python setup.py
-
-# Exit container
-exit
-```
-
-### 2. Environment Variables
-
-Create a `.env` file in your project directory:
-
-```env
-SECRET_KEY=your-very-secure-secret-key-change-this
-FLASK_ENV=production
-DB_PASSWORD=your-postgres-password-if-using-postgres
-```
-
-## 📦 Building and Pushing to Docker Hub
-
-### 1. Build the Image
-
-```bash
-# Build with tag
-docker build -t configlake/configlake:latest .
-
-# Build with version tag
-docker build -t configlake/configlake:v1.0.0 .
-```
-
-### 2. Test Locally
-
-```bash
-# Test the built image
-docker run -d \
-  --name configlake-test \
-  -p 5000:5000 \
-  configlake/configlake:latest
-
-# Check if it's working
-curl http://localhost:5000
-
-# Cleanup test container
-docker stop configlake-test
-docker rm configlake-test
-```
-
-### 3. Push to Docker Hub
-
-```bash
-# Login to Docker Hub
-docker login
-
-# Push latest tag
-docker push configlake/configlake:latest
-
-# Push version tag
-docker push configlake/configlake:v1.0.0
-```
-
-### 4. Multi-architecture Build (Optional)
-
-```bash
-# Create and use buildx builder
-docker buildx create --name configlake-builder --use
-
-# Build for multiple architectures
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t configlake/configlake:latest \
-  -t configlake/configlake:v1.0.0 \
-  --push .
-```
-
-## 🗄️ Database Options
-
-ConfigLake supports three database types configured via the `DATABASE_TYPE` environment variable.
-
-### SQLite (Default)
-
-```bash
-# Default - no additional configuration needed
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -e DATABASE_TYPE=sqlite \
-  -v configlake_data:/app/instance \
-  configlake/configlake:latest
-```
-
-### MySQL
-
-```bash
-# Using external MySQL
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -e DATABASE_TYPE=mysql \
-  -e MYSQL_USER=configlake \
-  -e MYSQL_PASSWORD=secure_password \
-  -e MYSQL_HOST=mysql_host \
-  -e MYSQL_PORT=3306 \
-  -e MYSQL_DB=configlake \
-  -v configlake_data:/app/instance \
-  configlake/configlake:latest
+# No additional setup required!
+docker run -d --name configlake -p 5000:5000 configlake/configlake
 ```
 
 ### PostgreSQL (Recommended for Production)
 
-```bash
-# Using external PostgreSQL
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -e DATABASE_TYPE=postgresql \
-  -e PG_USER=configlake \
-  -e PG_PASSWORD=secure_password \
-  -e PG_HOST=postgres_host \
-  -e PG_PORT=5432 \
-  -e PG_DB=configlake \
-  -v configlake_data:/app/instance \
-  configlake/configlake:latest
+```yaml
+# docker-compose.yml
+version: "3.8"
+services:
+  configlake:
+    image: configlake/configlake:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - configlake_data:/app/instance
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_TYPE=postgresql
+      - PG_HOST=postgres
+      - PG_USER=configlake
+      - PG_PASSWORD=${DB_PASSWORD}
+      - PG_DB=configlake
+    depends_on:
+      - postgres
 
-# Or uncomment PostgreSQL service in docker-compose.yml and use:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: configlake
+      POSTGRES_USER: configlake
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  configlake_data:
+  postgres_data:
+```
+
+### MySQL
+
+```yaml
+# Add to your docker-compose.yml
+services:
+  configlake:
+    environment:
+      - DATABASE_TYPE=mysql
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=configlake
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DB=configlake
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: configlake
+      MYSQL_USER: configlake
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+```
+
+## Using with Your Applications
+
+Once ConfigLake is running, integrate it with your applications:
+
+### Python Applications
+
+```bash
+# Install the client library
+pip install configlake
+```
+
+```python
+from configlake import getAllDetails
+
+# Load configuration
+config = getAllDetails(
+    "http://localhost:5000",  # ConfigLake URL
+    "your-api-token",        # Generate in dashboard
+    1,                       # Project ID
+    "production"             # Environment
+)
+
+# Use in your app
+database_url = config["configs"]["DATABASE_URL"]
+api_key = config["secrets"]["API_KEY"]
+```
+
+### Node.js Applications
+
+```bash
+# Install the client library
+npm install configlake
+```
+
+```javascript
+import { getAllDetails } from "configlake";
+
+// Load configuration
+const config = await getAllDetails(
+  "http://localhost:5000", // ConfigLake URL
+  "your-api-token", // Generate in dashboard
+  1, // Project ID
+  "production" // Environment
+);
+
+// Use in your app
+const databaseUrl = config.configs.DATABASE_URL;
+const apiKey = config.secrets.API_KEY;
+```
+
+## Environment Variables
+
+Configure ConfigLake using these environment variables:
+
+### Basic Configuration
+
+```bash
+# Required
+SECRET_KEY=your-super-secure-secret-key-change-in-production
+
+# Optional
+FLASK_ENV=production
+PORT=5000
+```
+
+### Database Configuration
+
+```bash
+# SQLite (default)
+DATABASE_TYPE=sqlite
+
+# PostgreSQL
+DATABASE_TYPE=postgresql
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=configlake
+PG_PASSWORD=your_password
+PG_DB=configlake
+
+# MySQL
+DATABASE_TYPE=mysql
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=configlake
+MYSQL_PASSWORD=your_password
+MYSQL_DB=configlake
+```
+
+### Security Configuration
+
+```bash
+# Encryption key for secrets (32 bytes)
+ENCRYPTION_KEY=your-32-byte-encryption-key-here
+
+# IP whitelisting (comma-separated)
+ALLOWED_IPS=127.0.0.1,192.168.1.0/24,10.0.0.0/8
+
+# API token expiry in seconds
+API_TOKEN_EXPIRY=86400
+```
+
+## Production Deployment
+
+### Docker Compose with PostgreSQL (Recommended)
+
+Create a production-ready setup:
+
+```yaml
+# docker-compose.prod.yml
+version: "3.8"
+
+services:
+  configlake:
+    image: configlake/configlake:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - configlake_data:/app/instance
+      - configlake_backups:/app/backups
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_TYPE=postgresql
+      - PG_HOST=postgres
+      - PG_USER=configlake
+      - PG_PASSWORD=${DB_PASSWORD}
+      - PG_DB=configlake
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ALLOWED_IPS=${ALLOWED_IPS}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: configlake
+      POSTGRES_USER: configlake
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Optional: Add nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - configlake
+    restart: unless-stopped
+
+volumes:
+  configlake_data:
+  configlake_backups:
+  postgres_data:
+```
+
+### Environment File for Production
+
+```bash
+# .env.prod
+SECRET_KEY=your-super-secure-secret-key-at-least-32-characters-long
+DB_PASSWORD=secure-database-password-here
+ENCRYPTION_KEY=your-32-byte-encryption-key-for-secrets-storage
+ALLOWED_IPS=192.168.1.0/24,10.0.0.0/8
+```
+
+### Deploy to Production
+
+```bash
+# Load environment variables
+source .env.prod
+
+# Deploy
+docker-compose -f docker-compose.prod.yml up -d
+
+# Create admin user
+docker-compose -f docker-compose.prod.yml exec configlake python app.py create-admin
+
+# Check status
+docker-compose -f docker-compose.prod.yml ps
+```
+
+## Management and Maintenance
+
+### Monitor Your ConfigLake Instance
+
+```bash
+# View application logs
+docker-compose logs -f configlake
+
+# Check all services status
+docker-compose ps
+
+# Monitor resource usage
+docker stats configlake
+
+# View database logs (if using PostgreSQL)
+docker-compose logs postgres
+```
+
+### Backup Your Data
+
+**Automatic Backup (Recommended):**
+
+```bash
+# Create a backup script
+cat > backup-configlake.sh << 'EOF'
+#!/bin/bash
+BACKUP_DIR="/backups/configlake"
+DATE=$(date +%Y%m%d-%H%M%S)
+mkdir -p $BACKUP_DIR
+
+# Backup application data
+docker run --rm \
+  -v configlake_data:/data \
+  -v $BACKUP_DIR:/backup \
+  alpine tar czf /backup/configlake-data-$DATE.tar.gz -C /data .
+
+# Backup database (if PostgreSQL)
+docker-compose exec -T postgres pg_dump -U configlake configlake > $BACKUP_DIR/configlake-db-$DATE.sql
+
+echo "Backup completed: $BACKUP_DIR"
+EOF
+
+chmod +x backup-configlake.sh
+
+# Run backup
+./backup-configlake.sh
+
+# Add to crontab for daily backups
+echo "0 2 * * * /path/to/backup-configlake.sh" | crontab -
+```
+
+**Manual Backup:**
+
+```bash
+# Backup data volume
+docker run --rm \
+  -v configlake_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/configlake-backup-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+### Restore From Backup
+
+```bash
+# Stop ConfigLake
+docker-compose down
+
+# Restore data
+docker run --rm \
+  -v configlake_data:/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/configlake-backup-20240101.tar.gz -C /data
+
+# Start ConfigLake
 docker-compose up -d
 ```
 
-## 🔍 Monitoring and Logs
+### Update ConfigLake
 
 ```bash
-# View logs
-docker-compose logs -f configlake
+# Pull latest image
+docker pull configlake/configlake:latest
 
-# Check container health
-docker-compose ps
+# Restart with new image
+docker-compose down
+docker-compose up -d
 
-# View resource usage
-docker stats configlake
+# Verify update
+docker-compose logs configlake
 ```
-
-## 📂 Volume Management
-
-### Backup Data
-
-```bash
-# Backup database
-docker run --rm \
-  -v configlake_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/configlake-backup.tar.gz -C /data .
-
-# Backup with timestamp
-docker run --rm \
-  -v configlake_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/configlake-backup-$(date +%Y%m%d-%H%M%S).tar.gz -C /data .
-```
-
-### Restore Data
-
-```bash
-# Restore from backup
-docker run --rm \
-  -v configlake_data:/data \
-  -v $(pwd):/backup \
-  alpine tar xzf /backup/configlake-backup.tar.gz -C /data
-```
-
-## 🔒 Security Considerations
-
-1. **Change default SECRET_KEY**: Always set a secure secret key
-2. **Use HTTPS**: Deploy behind a reverse proxy with SSL
-3. **Firewall**: Only expose port 5000 to trusted networks
-4. **Regular backups**: Set up automated database backups
-5. **Update regularly**: Keep the Docker image updated
 
 ## 🚀 Production Deployment
 
@@ -320,52 +556,129 @@ services:
     command: python app.py
 ```
 
-## ❓ Troubleshooting
+## Troubleshooting
 
-### Container won't start
+### Common Issues and Solutions
+
+**ConfigLake won't start:**
 
 ```bash
-# Check logs
-docker logs configlake
+# Check logs for errors
+docker-compose logs configlake
 
-# Check if port is available
-netstat -tulpn | grep :5000
+# Common fixes:
+# 1. Make sure port 5000 is available
+sudo netstat -tlnp | grep :5000
+
+# 2. Check if SECRET_KEY is set
+docker-compose exec configlake env | grep SECRET_KEY
+
+# 3. Verify database connection (if using external DB)
+docker-compose exec configlake python -c "from app import create_app, db; app=create_app(); print('DB OK')"
 ```
 
-### Permission issues
+**Can't create admin user:**
+
+```bash
+# Make sure ConfigLake is running first
+docker-compose ps
+
+# Try interactive mode
+docker-compose exec configlake python app.py create-admin
+
+# Or enter the container manually
+docker-compose exec configlake bash
+python app.py create-admin
+```
+
+**Database connection issues:**
+
+```bash
+# Check database container status
+docker-compose ps postgres
+
+# Check database logs
+docker-compose logs postgres
+
+# Test database connection
+docker-compose exec postgres psql -U configlake -d configlake -c "\dt"
+```
+
+**Permission issues:**
 
 ```bash
 # Fix volume permissions
-docker exec -it configlake chown -R configlake:configlake /app/instance
+docker-compose exec configlake chown -R configlake:configlake /app/instance /app/backups
 ```
 
-### Database connection issues
+### Performance Tuning
+
+**For High Traffic:**
+
+```yaml
+# docker-compose.yml - Add resource limits
+services:
+  configlake:
+    image: configlake/configlake:latest
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.5"
+        reservations:
+          memory: 512M
+          cpus: "0.25"
+    environment:
+      - FLASK_ENV=production
+      - WORKERS=4 # Adjust based on CPU cores
+```
+
+**Database Optimization:**
+
+```yaml
+# For PostgreSQL
+postgres:
+  image: postgres:15-alpine
+  command: >
+    postgres
+    -c max_connections=100
+    -c shared_buffers=256MB
+    -c effective_cache_size=1GB
+    -c maintenance_work_mem=64MB
+```
+
+## Quick Reference
+
+### Essential Commands
 
 ```bash
-# Check database connection
-docker exec -it configlake python -c "from app import create_app, db; app=create_app(); app.app_context().push(); print('DB Connected:', db.engine.execute('SELECT 1').fetchone())"
+# Start ConfigLake
+docker-compose up -d
+
+# View logs
+docker-compose logs -f configlake
+
+# Create admin user
+docker-compose exec configlake python app.py create-admin
+
+# Backup data
+docker-compose exec postgres pg_dump -U configlake configlake > backup.sql
+
+# Update ConfigLake
+docker-compose pull && docker-compose up -d
+
+# Stop ConfigLake
+docker-compose down
 ```
 
-## 📋 Docker Hub Repository
+### Links and Resources
 
-**Repository**: `configlake/configlake`  
-**Tags**:
-
-- `latest` - Latest stable version
-- `v1.0.0` - Specific version
-- `dev` - Development version
-
-## 🤝 Contributing
-
-To contribute to the Docker setup:
-
-1. Fork the repository
-2. Make your changes to Dockerfile or docker-compose.yml
-3. Test locally with `docker-compose up --build`
-4. Submit a pull request
-
-## 📞 Support
-
+- **Docker Image**: `docker pull configlake/configlake`
+- **GitHub Repository**: https://github.com/Govind-Deshmukh/configlake
+- **Python Client**: `pip install configlake`
+- **Node.js Client**: `npm install configlake`
 - **Issues**: https://github.com/Govind-Deshmukh/configlake/issues
-- **Discussions**: https://github.com/Govind-Deshmukh/configlake/discussions
-- **Docker Hub**: https://hub.docker.com/r/configlake/configlake
+
+## License
+
+MIT License - see the main repository for details.

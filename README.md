@@ -1,6 +1,16 @@
 # ConfigLake
 
-A secure, centralized service for managing application configurations and sensitive secrets across multiple projects and environments.
+A secure, centralized configuration and secrets management platform for modern applications. ConfigLake helps you organize your environment variables, API keys, database connections, and other sensitive data across different environments (development, staging, production) in one secure dashboard.
+
+## What is ConfigLake?
+
+ConfigLake is a Python-based middleware that provides a web dashboard and API for managing application configurations and secrets. Instead of scattered `.env` files or hardcoded values, ConfigLake gives you:
+
+- **One central place** to manage all your app configs
+- **Secure encryption** for sensitive data like passwords and API keys  
+- **Multiple environments** support (dev, staging, prod)
+- **Easy access** via Python and Node.js client libraries
+- **Team collaboration** with role-based permissions
 
 ## Features
 
@@ -14,332 +24,276 @@ A secure, centralized service for managing application configurations and sensit
 
 ## Quick Start
 
-### 1. Installation
+### Option 1: Using Docker (Recommended)
+
+The easiest way to get started:
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd config-manager
+# Pull and run ConfigLake
+docker pull configlake/configlake
+docker run -d --name configlake -p 5000:5000 configlake/configlake
+
+# Create admin user
+docker exec -it configlake python app.py create-admin
+
+# Access at http://localhost:5000
+```
+
+### Option 2: Manual Installation
+
+```bash
+# Clone the repository  
+git clone https://github.com/Govind-Deshmukh/configlake
+cd configlake
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy environment configuration
-cp .env.example .env
-```
-
-### 2. Configuration
-
-Edit the `.env` file with your settings:
-
-```env
-# Flask Configuration
-SECRET_KEY=your-secret-key-here
-
-# Database Configuration (choose one)
-DATABASE_TYPE=sqlite  # Options: sqlite, mysql, postgresql
-
-# For SQLite (default)
-DATABASE_URL=sqlite:///config_manager.db
-
-# For MySQL
-MYSQL_USER=root
-MYSQL_PASSWORD=password
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_DB=config_manager
-
-# For PostgreSQL
-PG_USER=postgres
-PG_PASSWORD=password
-PG_HOST=localhost
-PG_PORT=5432
-PG_DB=config_manager
-
-# Security
-ENCRYPTION_KEY=generate-a-32-byte-key-for-production
-ALLOWED_IPS=127.0.0.1,192.168.1.0/24
-```
-
-### 3. Database Setup
-
-```bash
-# Initialize the database
+# Setup database and admin user
 python app.py init-db
-
-# Create an admin user
 python app.py create-admin
-```
 
-### 4. Run the Application
-
-```bash
+# Run the application
 python app.py
 ```
 
-The application will be available at `http://localhost:5000`
+Visit `http://localhost:5000` and login with your admin credentials.
 
-## API Usage
+## Client Libraries
 
-### Authentication
-
-All API requests require a Bearer token in the Authorization header:
-
-```bash
-Authorization: Bearer <your-api-token>
-```
-
-### Get Configurations
-
-Retrieve all configurations for a specific environment:
-
-```bash
-GET /api/config/<project_id>/<environment_name>
-```
-
-Response:
-```json
-{
-  "project_id": 1,
-  "environment": "production",
-  "configs": {
-    "DATABASE_URL": "postgresql://...",
-    "API_ENDPOINT": "https://api.example.com"
-  }
-}
-```
-
-### Get Secrets
-
-Retrieve all encrypted secrets for a specific environment:
-
-```bash
-GET /api/secrets/<project_id>/<environment_name>
-```
-
-Response:
-```json
-{
-  "project_id": 1,
-  "environment": "production",
-  "environment_key": "encryption-key-for-this-env",
-  "secrets": {
-    "API_KEY": "encrypted-value-1",
-    "JWT_SECRET": "encrypted-value-2"
-  }
-}
-```
-
-### Get All Data
-
-Retrieve both configurations and secrets:
-
-```bash
-GET /api/all/<project_id>/<environment_name>
-```
-
-### Client-Side Decryption
-
-Secrets are returned encrypted. Decrypt them using the environment key:
-
-```python
-import base64
-from cryptography.fernet import Fernet
-
-def decrypt_secret(encrypted_value, environment_key):
-    fernet = Fernet(environment_key.encode())
-    decoded_value = base64.b64decode(encrypted_value.encode())
-    return fernet.decrypt(decoded_value).decode()
-
-# Usage
-decrypted_secret = decrypt_secret(
-    secrets['API_KEY'], 
-    response['environment_key']
-)
-```
-
-## Management API
-
-### Create/Update Configuration
-
-```bash
-POST /api/manage/config/<project_id>/<environment_name>
-Content-Type: application/json
-
-{
-  "key": "DATABASE_URL",
-  "value": "postgresql://user:pass@localhost/db"
-}
-```
-
-### Create/Update Secret
-
-```bash
-POST /api/manage/secret/<project_id>/<environment_name>
-Content-Type: application/json
-
-{
-  "key": "API_KEY",
-  "value": "secret-api-key-value"
-}
-```
-
-### Delete Configuration/Secret
-
-```bash
-DELETE /api/manage/config/<project_id>/<environment_name>/<key>
-DELETE /api/manage/secret/<project_id>/<environment_name>/<key>
-```
-
-### Generate API Token
-
-```bash
-POST /api/manage/token/<project_id>/<environment_id>
-Content-Type: application/json
-
-{
-  "name": "Production API Token"
-}
-```
-
-## Role Permissions
-
-### Owner
-- Full project control
-- Manage users and roles
-- Create/delete environments
-- Backup and restore
-- Security settings (IP whitelist)
-- Generate API tokens
-
-### Maintainer
-- Create/update/delete configs and secrets
-- View all project data
-- Cannot manage users or security settings
-
-### Reader
-- View configurations and secrets
-- Cannot make changes
-
-## Security Features
-
-### Encryption at Rest
-- All secrets are encrypted using environment-specific keys
-- Each environment has its own encryption key
-- Keys are generated using Fernet (symmetric encryption)
-
-### IP Whitelisting
-- Restrict API access to specific IP addresses
-- Support for both single IPs and CIDR ranges
-- Configurable per project
-
-### API Token Security
-- Tokens are generated using cryptographically secure random functions
-- Tokens can be scoped to specific projects and environments
-- Configurable expiration times
-
-### Backup Security
-- Backups are encrypted using password-derived keys
-- PBKDF2 with SHA-256 for key derivation
-- ZIP compression with encrypted contents
-
-## Example Client Implementation
+ConfigLake provides official client libraries for easy integration:
 
 ### Python Client
 
+```bash
+pip install configlake
+```
+
 ```python
-import requests
-import base64
-from cryptography.fernet import Fernet
+from configlake import getConfig, getSecrets, getAllDetails
 
-class ConfigManager:
-    def __init__(self, base_url, project_id, environment, api_token):
-        self.base_url = base_url
-        self.project_id = project_id
-        self.environment = environment
-        self.headers = {'Authorization': f'Bearer {api_token}'}
-    
-    def get_config(self, key=None):
-        """Get configurations."""
-        url = f"{self.base_url}/api/config/{self.project_id}/{self.environment}"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        if key:
-            return data['configs'].get(key)
-        return data['configs']
-    
-    def get_secret(self, key):
-        """Get and decrypt a secret."""
-        url = f"{self.base_url}/api/all/{self.project_id}/{self.environment}"
-        response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
-        
-        data = response.json()
-        encrypted_value = data['secrets'].get(key)
-        
-        if not encrypted_value:
-            return None
-        
-        # Decrypt the secret
-        fernet = Fernet(data['environment_key'].encode())
-        decoded_value = base64.b64decode(encrypted_value.encode())
-        return fernet.decrypt(decoded_value).decode()
+# Get configurations only
+configs = getConfig("http://localhost:5000", "your-token", 1, "production")
+db_url = configs["DATABASE_URL"]
 
-# Usage
-config_manager = ConfigManager(
-    base_url="https://config-manager.example.com",
-    project_id=1,
-    environment="production",
-    api_token="your-api-token"
-)
+# Get secrets only (automatically decrypted)
+secrets = getSecrets("http://localhost:5000", "your-token", 1, "production")
+api_key = secrets["API_KEY"]
 
-database_url = config_manager.get_config('DATABASE_URL')
-api_key = config_manager.get_secret('API_KEY')
+# Get everything together
+data = getAllDetails("http://localhost:5000", "your-token", 1, "production")
 ```
 
-## Development
+### Node.js Client
 
-### Database Migrations
-
-When making model changes:
-
-1. Stop the application
-2. Backup your data
-3. Delete the database file (for SQLite)
-4. Run `python app.py init-db`
-5. Recreate your data or restore from backup
-
-## Deployment
-
-### Production Checklist
-
-- [ ] Change default SECRET_KEY
-- [ ] Generate secure ENCRYPTION_KEY
-- [ ] Configure proper database (not SQLite for production)
-- [ ] Set up HTTPS/TLS
-- [ ] Configure IP whitelisting
-- [ ] Set up regular backups
-- [ ] Configure reverse proxy (nginx/Apache)
-- [ ] Set appropriate file permissions
-- [ ] Enable logging
-
-### Docker Deployment
-
-```dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-
-EXPOSE 5000
-CMD ["python", "app.py"]
+```bash
+npm install configlake
 ```
+
+```javascript
+import { getConfig, getSecrets, getAllDetails } from 'configlake';
+
+// Get configurations only
+const configs = await getConfig("http://localhost:5000", "your-token", 1, "production");
+const dbUrl = configs.DATABASE_URL;
+
+// Get secrets only (automatically decrypted)
+const secrets = await getSecrets("http://localhost:5000", "your-token", 1, "production");
+const apiKey = secrets.API_KEY;
+
+// Get everything together
+const data = await getAllDetails("http://localhost:5000", "your-token", 1, "production");
+```
+
+## Direct API Access
+
+If you prefer direct API calls:
+
+### Get Data
+```bash
+# Get configs and secrets
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:5000/api/all/PROJECT_ID/ENVIRONMENT
+```
+
+### Manage Data
+```bash  
+# Add/update config
+curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"DATABASE_URL","value":"postgresql://..."}' \
+  http://localhost:5000/api/manage/config/PROJECT_ID/ENVIRONMENT
+
+# Add/update secret
+curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"API_KEY","value":"secret-value"}' \
+  http://localhost:5000/api/manage/secret/PROJECT_ID/ENVIRONMENT
+```
+
+## User Roles
+
+ConfigLake has three user roles for team collaboration:
+
+- **Owner**: Full access - manage users, projects, security settings
+- **Maintainer**: Can create/edit/delete configs and secrets  
+- **Reader**: View-only access to configurations and secrets
+
+## Security Features
+
+- **Encryption at Rest**: Secrets are encrypted using environment-specific keys
+- **IP Whitelisting**: Restrict API access to specific IP addresses
+- **API Token Authentication**: Secure token-based authentication
+- **Role-Based Access**: Control what users can see and modify
+- **Secure Backups**: Encrypted backup system with password protection
+
+## Database Support
+
+ConfigLake works with multiple database types:
+
+- **SQLite** (default): Perfect for getting started, no setup required
+- **PostgreSQL** (recommended for production): Best performance and features
+- **MySQL**: Alternative production database option
+
+### Database Configuration
+
+Set your database type using environment variables:
+
+```bash
+# SQLite (default)
+DATABASE_TYPE=sqlite
+
+# PostgreSQL  
+DATABASE_TYPE=postgresql
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=configlake
+PG_PASSWORD=your_password
+PG_DB=configlake
+
+# MySQL
+DATABASE_TYPE=mysql  
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=configlake
+MYSQL_PASSWORD=your_password
+MYSQL_DB=configlake
+```
+
+## Docker Deployment
+
+ConfigLake is available as a Docker image for easy deployment:
+
+### Basic Docker Run
+
+```bash
+# Run with default SQLite database
+docker run -d \
+  --name configlake \
+  -p 5000:5000 \
+  -v configlake_data:/app/instance \
+  -e SECRET_KEY="your-secret-key" \
+  configlake/configlake
+
+# Create admin user
+docker exec -it configlake python app.py create-admin
+```
+
+### Docker Compose (Recommended)
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+services:
+  configlake:
+    image: configlake/configlake:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - configlake_data:/app/instance
+      - configlake_backups:/app/backups
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_TYPE=postgresql
+      - PG_HOST=postgres
+      - PG_USER=configlake
+      - PG_PASSWORD=${DB_PASSWORD}
+      - PG_DB=configlake
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: configlake
+      POSTGRES_USER: configlake  
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  configlake_data:
+  configlake_backups:
+  postgres_data:
+```
+
+Run with: `docker-compose up -d`
+
+## Getting Started Guide
+
+### 1. Set Up ConfigLake
+Choose your preferred method:
+- **Docker**: `docker run configlake/configlake` (easiest)
+- **Manual**: Clone repository and run `python app.py`
+
+### 2. Access the Dashboard  
+Open `http://localhost:5000` and login with admin credentials.
+
+### 3. Create Your First Project
+1. Click "Create Project" 
+2. Add environments (development, staging, production)
+3. Add team members with appropriate roles
+
+### 4. Add Configuration Data
+- **Configs**: Non-sensitive settings (database URLs, API endpoints)
+- **Secrets**: Sensitive data (passwords, API keys) - automatically encrypted
+
+### 5. Generate API Token
+Create tokens for your applications to access the data programmatically.
+
+### 6. Integrate with Your App
+Install the client library and fetch your configuration:
+
+```python
+# Python
+from configlake import getAllDetails
+data = getAllDetails("http://localhost:5000", "token", project_id, "production")
+```
+
+```javascript
+// Node.js  
+import { getAllDetails } from 'configlake';
+const data = await getAllDetails("http://localhost:5000", "token", projectId, "production");
+```
+
+## Production Deployment
+
+For production use:
+1. Use PostgreSQL or MySQL database (not SQLite)
+2. Set strong `SECRET_KEY` and `ENCRYPTION_KEY`
+3. Enable HTTPS with reverse proxy (nginx/Apache)
+4. Configure IP whitelisting for security
+5. Set up regular backups
+
+## Support & Links
+
+- **Docker Image**: `docker pull configlake/configlake`
+- **Python Package**: `pip install configlake`
+- **NPM Package**: `npm install configlake`
+- **GitHub Issues**: Report bugs and feature requests
+- **Documentation**: See [DOCKER.md](./DOCKER.md) for detailed Docker instructions
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see LICENSE file for details.

@@ -90,6 +90,6 @@ If you have questions about contributing, feel free to:
 
 - Open an issue for discussion
 - Contact the maintainers
-- Check our documentation
+- Drop an mail to : govind.ub47@gmail.com
 
 Thank you for making ConfigLake better! 🚀
