@@ -51,27 +51,33 @@
             </div>
             <div class="card-body">
                 {% if environments %}
-                    <div class="row">
-                        {% for environment in environments %}
-                        <div class="col-md-6 col-lg-4 mb-3">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6 class="card-title">
-                                        <i class="bi bi-box"></i> {{ environment.name }}
-                                    </h6>
-                                    <p class="text-muted small">
-                                        Created {{ environment.created_at.strftime('%Y-%m-%d') }}
-                                    </p>
-                                </div>
-                                <div class="card-footer">
-                                    <a href="{{ url_for('projects.view_environment', project_id=project.id, environment_id=environment.id) }}" 
-                                       class="btn btn-outline-primary btn-sm">
-                                        <i class="bi bi-eye"></i> View
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Environment</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for environment in environments %}
+                                <tr>
+                                    <td>
+                                        <i class="bi bi-box me-2"></i>
+                                        <strong>{{ environment.name }}</strong>
+                                    </td>
+                                    <td>{{ environment.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <a href="{{ url_for('projects.view_environment', project_id=project.id, environment_id=environment.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 {% else %}
                     <div class="text-center py-5">

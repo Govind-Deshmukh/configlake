@@ -207,9 +207,6 @@ def manage_config(project_id, environment_name):
     """Save/update configurations and secrets for an environment."""
     data = request.get_json()
     
-    print(f"DEBUG: manage_config called with project_id={project_id}, environment_name='{environment_name}'")
-    print(f"DEBUG: Received data: {data}")
-    
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
@@ -360,9 +357,6 @@ def manage_secret(project_id, environment_name):
     """Save/update secrets for an environment."""
     data = request.get_json()
     
-    print(f"DEBUG: manage_secret called with project_id={project_id}, environment_name='{environment_name}'")
-    print(f"DEBUG: Received data: {data}")
-    
     if not data:
         return jsonify({'error': 'No data provided'}), 400
     
@@ -439,29 +433,3 @@ def clear_environment_data(project_id, environment_name):
     
     return jsonify({'message': 'Environment data cleared successfully'})
 
-# Test endpoint to verify IP whitelisting behavior
-@api_bp.route('/test/ip-check/<int:project_id>')
-@login_required
-@require_project_permission_with_ip('reader')
-def test_ip_check(project_id):
-    """Test endpoint that enforces IP whitelisting."""
-    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.remote_addr
-    return jsonify({
-        'message': 'IP check passed!',
-        'project_id': project_id,
-        'client_ip': client_ip,
-        'note': 'This endpoint enforces IP whitelisting'
-    })
-
-@api_bp.route('/test/no-ip-check/<int:project_id>')
-@login_required
-@require_project_permission('reader')
-def test_no_ip_check(project_id):
-    """Test endpoint that bypasses IP whitelisting."""
-    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.remote_addr
-    return jsonify({
-        'message': 'No IP check - dashboard access!',
-        'project_id': project_id,
-        'client_ip': client_ip,
-        'note': 'This endpoint bypasses IP whitelisting (for dashboard)'
-    })

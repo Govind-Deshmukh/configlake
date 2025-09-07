@@ -35,82 +35,111 @@
     </div>
 </div>
 
-<!-- Configurations Section -->
+<!-- Main Content Section -->
 <div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
+    <div class="col-md-8">
+        <!-- Configurations Section -->
+        <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-gear"></i> Configurations</h5>
             </div>
             <div class="card-body">
                 {% if configs %}
-                    {% for config in configs %}
-                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
-                        <div>
-                            <strong>{{ config.key }}</strong><br>
-                            <small class="text-muted">{{ config.value[:50] }}{% if config.value|length > 50 %}...{% endif %}</small>
-                        </div>
-                        {% if g.user_role in ['owner', 'maintainer'] %}
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary btn-sm" onclick="editConfig('{{ config.key }}', '{{ config.value }}')">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <form method="POST" action="{{ url_for('projects.delete_config', project_id=project.id, environment_id=environment.id, config_key=config.key) }}" class="d-inline">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this configuration?')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                        {% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Value</th>
+                                    {% if g.user_role in ['owner', 'maintainer'] %}
+                                    <th>Actions</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for config in configs %}
+                                <tr>
+                                    <td><strong>{{ config.key }}</strong></td>
+                                    <td>
+                                        <small class="text-muted">{{ config.value[:50] }}{% if config.value|length > 50 %}...{% endif %}</small>
+                                    </td>
+                                    {% if g.user_role in ['owner', 'maintainer'] %}
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary btn-sm" onclick="editConfig('{{ config.key }}', '{{ config.value }}')">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form method="POST" action="{{ url_for('projects.delete_config', project_id=project.id, environment_id=environment.id, config_key=config.key) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this configuration?')">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    {% endfor %}
                 {% else %}
                     <p class="text-muted">No configurations defined.</p>
                 {% endif %}
             </div>
         </div>
-    </div>
 
-    <!-- Secrets Section -->
-    <div class="col-md-6">
+        <!-- Secrets Section -->
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Secrets</h5>
             </div>
             <div class="card-body">
                 {% if secrets %}
-                    {% for secret in secrets %}
-                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
-                        <div>
-                            <strong>{{ secret.key }}</strong><br>
-                            <small class="text-muted">••••••••••••••••</small>
-                        </div>
-                        {% if g.user_role in ['owner', 'maintainer'] %}
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary btn-sm" onclick="editSecret('{{ secret.key }}')">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <form method="POST" action="{{ url_for('projects.delete_secret', project_id=project.id, environment_id=environment.id, secret_key=secret.key) }}" class="d-inline">
-                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this secret?')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                        {% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Value</th>
+                                    {% if g.user_role in ['owner', 'maintainer'] %}
+                                    <th>Actions</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for secret in secrets %}
+                                <tr>
+                                    <td><strong>{{ secret.key }}</strong></td>
+                                    <td><small class="text-muted">••••••••••••••••</small></td>
+                                    {% if g.user_role in ['owner', 'maintainer'] %}
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary btn-sm" onclick="editSecret('{{ secret.key }}')">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form method="POST" action="{{ url_for('projects.delete_secret', project_id=project.id, environment_id=environment.id, secret_key=secret.key) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this secret?')">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    {% endfor %}
                 {% else %}
                     <p class="text-muted">No secrets defined.</p>
                 {% endif %}
             </div>
         </div>
     </div>
-</div>
 
-<!-- API Tokens Section -->
-{% if g.user_role == 'owner' %}
-<div class="row mt-4">
-    <div class="col-12">
+    <!-- API Tokens Sidebar -->
+    <div class="col-md-4">
+        {% if g.user_role == 'owner' %}
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-key"></i> API Tokens</h5>
@@ -125,8 +154,6 @@
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>Created</th>
-                                    <th>Expires</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -134,9 +161,10 @@
                             <tbody>
                                 {% for token in api_tokens %}
                                 <tr>
-                                    <td>{{ token.name }}</td>
-                                    <td>{{ token.created_at.strftime('%Y-%m-%d') }}</td>
-                                    <td>{{ token.expires_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <small><strong>{{ token.name }}</strong></small><br>
+                                        <small class="text-muted">{{ token.created_at.strftime('%Y-%m-%d') }}</small>
+                                    </td>
                                     <td>
                                         {% if token.is_active %}
                                             <span class="badge bg-success">Active</span>
@@ -146,15 +174,15 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-warning btn-sm" onclick="toggleToken({{ token.id }}, {{ token.is_active|lower }})">
+                                            <button class="btn btn-outline-warning btn-sm" onclick="toggleToken({{ token.id }}, {{ token.is_active|lower }})" title="{% if token.is_active %}Deactivate{% else %}Activate{% endif %}">
                                                 {% if token.is_active %}
-                                                    <i class="bi bi-pause"></i> Deactivate
+                                                    <i class="bi bi-pause"></i>
                                                 {% else %}
-                                                    <i class="bi bi-play"></i> Activate
+                                                    <i class="bi bi-play"></i>
                                                 {% endif %}
                                             </button>
-                                            <button class="btn btn-outline-danger btn-sm" onclick="revokeToken({{ token.id }}, '{{ token.name }}')">
-                                                <i class="bi bi-trash"></i> Revoke
+                                            <button class="btn btn-outline-danger btn-sm" onclick="revokeToken({{ token.id }}, '{{ token.name }}')" title="Revoke">
+                                                <i class="bi bi-trash"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -168,9 +196,9 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
-{% endif %}
 
 <!-- Modals -->
 {% if g.user_role in ['owner', 'maintainer'] %}

@@ -280,11 +280,6 @@ MYSQL_DB=configlake
 # Encryption key for secrets (32 bytes)
 ENCRYPTION_KEY=your-32-byte-encryption-key-here
 
-# IP whitelisting (comma-separated)
-ALLOWED_IPS=127.0.0.1,192.168.1.0/24,10.0.0.0/8
-
-# API token expiry in seconds
-API_TOKEN_EXPIRY=86400
 ```
 
 ## Production Deployment
@@ -314,7 +309,6 @@ services:
       - PG_PASSWORD=${DB_PASSWORD}
       - PG_DB=configlake
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - ALLOWED_IPS=${ALLOWED_IPS}
     depends_on:
       - postgres
     restart: unless-stopped
@@ -360,7 +354,6 @@ volumes:
 SECRET_KEY=your-super-secure-secret-key-at-least-32-characters-long
 DB_PASSWORD=secure-database-password-here
 ENCRYPTION_KEY=your-32-byte-encryption-key-for-secrets-storage
-ALLOWED_IPS=192.168.1.0/24,10.0.0.0/8
 ```
 
 ### Deploy to Production
@@ -521,8 +514,6 @@ PG_DB=configlake
 
 # Security Configuration
 ENCRYPTION_KEY=your-32-byte-encryption-key-for-secrets
-ALLOWED_IPS=192.168.1.0/24,10.0.0.0/8
-API_TOKEN_EXPIRY=86400
 
 # Optional: MySQL Configuration (if using MySQL)
 # DATABASE_TYPE=mysql

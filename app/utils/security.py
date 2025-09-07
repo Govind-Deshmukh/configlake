@@ -116,7 +116,6 @@ def require_project_permission(required_role='reader'):
                 return jsonify({'error': 'Project ID required'}), 400
             
             # NO IP whitelist check for dashboard/management interfaces
-            print(f"DEBUG: Dashboard access - bypassing IP check for project {project_id}")
             
             # Check user permissions
             if not current_user.is_authenticated:
@@ -160,7 +159,6 @@ def require_project_permission_with_ip(required_role='reader'):
                 return jsonify({'error': 'Project ID required'}), 400
             
             # Check IP whitelist for client API endpoints  
-            print(f"DEBUG: Client API access - checking IP whitelist for project {project_id}")
             if not check_ip_whitelist(project_id):
                 return jsonify({'error': 'Access denied: IP not whitelisted'}), 403
             
@@ -220,7 +218,6 @@ def require_api_token():
                 return jsonify({'error': 'API token expired'}), 401
             
             # Check IP whitelist for the project and environment
-            print(f"DEBUG: API Token access - checking IP whitelist for project {api_token.project_id}, env {api_token.environment_id}")
             if not check_ip_whitelist(api_token.project_id, api_token.environment_id):
                 return jsonify({'error': 'Access denied: IP not whitelisted'}), 403
             

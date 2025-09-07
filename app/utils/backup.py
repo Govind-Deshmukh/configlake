@@ -2,7 +2,6 @@ import json
 import zipfile
 import io
 from datetime import datetime
-from flask import current_app
 from app import db
 from app.models import Project, Environment, Config, Secret, ProjectUser, AllowedIP, User
 from app.utils.encryption import EncryptionManager

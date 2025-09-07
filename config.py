@@ -31,6 +31,3 @@ class Config:
     # Encryption key for secrets
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or 'generate-a-32-byte-key-for-production'
     
-    # Security settings
-    ALLOWED_IPS = os.environ.get('ALLOWED_IPS', '').split(',') if os.environ.get('ALLOWED_IPS') else []
-    API_TOKEN_EXPIRY = int(os.environ.get('API_TOKEN_EXPIRY', 86400))  # 24 hours
