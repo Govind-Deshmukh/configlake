@@ -321,33 +321,6 @@ def delete_config_key(project_id, environment_name, key):
     
     return jsonify({'error': f'Key "{key}" not found'}), 404
 
-# Debug endpoint to verify configs and secrets are saved
-@api_bp.route('/debug/config/<int:project_id>/<environment_name>')
-@login_required
-def debug_config(project_id, environment_name):
-    """Debug endpoint to check saved configs and secrets."""
-    environment = Environment.query.filter_by(
-        project_id=project_id,
-        name=environment_name
-    ).first()
-    
-    if not environment:
-        return jsonify({'error': 'Environment not found'}), 404
-    
-    configs = Config.query.filter_by(environment_id=environment.id).all()
-    secrets = Secret.query.filter_by(environment_id=environment.id).all()
-    
-    config_data = [{'key': c.key, 'value': c.value, 'id': c.id} for c in configs]
-    secret_data = [{'key': s.key, 'id': s.id} for s in secrets]
-    
-    return jsonify({
-        'environment_id': environment.id,
-        'environment_name': environment.name,
-        'configs_count': len(configs),
-        'secrets_count': len(secrets),
-        'configs': config_data,
-        'secrets': secret_data
-    })
 
 # Separate endpoints for configs and secrets (for backward compatibility with templates)
 @api_bp.route('/manage/secret/<int:project_id>/<environment_name>', methods=['POST'])
@@ -412,24 +385,4 @@ def manage_secret(project_id, environment_name):
         db.session.rollback()
         return jsonify({'error': f'Failed to save secrets: {str(e)}'}), 500
 
-# Utility endpoint for testing - clear all configs/secrets for an environment
-@api_bp.route('/debug/clear/<int:project_id>/<environment_name>', methods=['POST'])
-@login_required
-@require_project_permission('write')
-def clear_environment_data(project_id, environment_name):
-    """Clear all configs and secrets for testing purposes."""
-    environment = Environment.query.filter_by(
-        project_id=project_id,
-        name=environment_name
-    ).first()
-    
-    if not environment:
-        return jsonify({'error': 'Environment not found'}), 404
-    
-    # Clear all configs and secrets
-    Config.query.filter_by(environment_id=environment.id).delete()
-    Secret.query.filter_by(environment_id=environment.id).delete()
-    db.session.commit()
-    
-    return jsonify({'message': 'Environment data cleared successfully'})
 

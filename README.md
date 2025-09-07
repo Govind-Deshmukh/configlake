@@ -107,28 +107,40 @@ const data = await getAllDetails("http://localhost:5000", "your-token", 1, "prod
 
 ## Direct API Access
 
-If you prefer direct API calls:
+### Get API Token
+1. Go to `http://localhost:5000/projects/{project_id}/environment/{env_id}`
+2. Click "Create Token" (owner role required)
+3. Copy the generated token
 
-### Get Data
+### Retrieve Data
 ```bash
-# Get configs and secrets
+# Get all data (configs + secrets)
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:5000/api/all/PROJECT_ID/ENVIRONMENT
+  http://localhost:5000/api/all/PROJECT_ID/ENVIRONMENT_NAME
+
+# Get configs only
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:5000/api/config/PROJECT_ID/ENVIRONMENT_NAME
+
+# Get secrets only
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  http://localhost:5000/api/secrets/PROJECT_ID/ENVIRONMENT_NAME
 ```
 
-### Manage Data
-```bash  
-# Add/update config
-curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"DATABASE_URL","value":"postgresql://..."}' \
-  http://localhost:5000/api/manage/config/PROJECT_ID/ENVIRONMENT
-
-# Add/update secret
-curl -X POST -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"API_KEY","value":"secret-value"}' \
-  http://localhost:5000/api/manage/secret/PROJECT_ID/ENVIRONMENT
+### Example Response
+```json
+{
+  "project_id": 1,
+  "environment": "production", 
+  "configs": {
+    "DATABASE_URL": "postgresql://...",
+    "API_ENDPOINT": "https://api.example.com"
+  },
+  "secrets": {
+    "API_KEY": "decrypted-value",
+    "DB_PASSWORD": "secret-password"
+  }
+}
 ```
 
 ## User Roles

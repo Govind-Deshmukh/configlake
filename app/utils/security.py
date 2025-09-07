@@ -1,5 +1,6 @@
 import ipaddress
 import socket
+import re
 from functools import wraps
 from flask import request, jsonify, g
 from flask_login import current_user
@@ -226,3 +227,79 @@ def require_api_token():
         
         return decorated_function
     return decorator
+
+def check_origin_whitelist(origin, project_id, environment_id=None):
+    """Check if the origin is whitelisted for the project or environment (for CORS)."""
+    if not origin:
+        return False
+    
+    # Get allowed IPs for the project
+    query = AllowedIP.query.filter_by(project_id=project_id)
+    
+    # Check if environment_id column exists (for backward compatibility)
+    try:
+        if environment_id and hasattr(AllowedIP, 'environment_id'):
+            # New version: Check both project-wide and environment-specific IPs
+            allowed_ips = query.filter(
+                (AllowedIP.environment_id == environment_id) | 
+                (AllowedIP.environment_id == None)
+            ).all()
+        else:
+            # Fallback for older database schema
+            allowed_ips = query.all()
+    except Exception:
+        # Fallback to old behavior if column doesn't exist
+        allowed_ips = query.all()
+    
+    # If no IPs are configured, deny access
+    if not allowed_ips:
+        return False
+    
+    # Extract hostname and port from origin (e.g., "http://localhost:3000")
+    origin_pattern = r'^https?://([^:/]+)(?::(\d+))?'
+    origin_match = re.match(origin_pattern, origin)
+    
+    if not origin_match:
+        return False
+    
+    origin_host = origin_match.group(1)
+    origin_port = origin_match.group(2)
+    
+    # Check against whitelist entries
+    for allowed_ip in allowed_ips:
+        try:
+            # Handle different formats in whitelist:
+            # 1. "http://localhost:3000" - full URL format
+            # 2. "localhost:3000" - host:port format  
+            # 3. "localhost" - just hostname
+            # 4. "10.21.81.126:3000" - IP:port format
+            # 5. "10.21.81.126" - just IP
+            
+            allowed_entry = allowed_ip.ip_address.strip()
+            
+            # Check if it's a full URL (starts with http/https)
+            if allowed_entry.startswith(('http://', 'https://')):
+                if origin == allowed_entry:
+                    return True
+                continue
+            
+            # Handle host:port format
+            port_pattern = r'^(.+):(\d+)$'
+            port_match = re.match(port_pattern, allowed_entry)
+            
+            if port_match:
+                allowed_host = port_match.group(1)
+                allowed_port = port_match.group(2)
+                
+                # Check if both host and port match
+                if origin_host == allowed_host and origin_port == allowed_port:
+                    return True
+            else:
+                # Just hostname/IP - check if host matches (ignoring port)
+                if origin_host == allowed_entry:
+                    return True
+        
+        except Exception:
+            continue
+    
+    return False
