@@ -12,7 +12,8 @@ services:
       - configlake_backups:/app/backups
     environment:
       - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - CONFIGLAKE_MASTER_KEY=${CONFIGLAKE_MASTER_KEY}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]

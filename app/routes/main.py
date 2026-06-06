@@ -1,7 +1,17 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+import io
+import json
+import logging
+import os
+
+from flask import Blueprint, current_app, jsonify, render_template, redirect, request, flash, send_file, url_for
 from flask_login import login_required, current_user
-from app.models import Project, ProjectUser, User
+
 from app import db
+from app.models import Environment, Project, ProjectUser, User
+from app.utils.backup import BackupManager
+from app.utils.encryption import EncryptionManager
+
+logger = logging.getLogger(__name__)
 
 main_bp = Blueprint('main', __name__)
 
@@ -98,3 +108,161 @@ def delete_user(user_id):
     
     flash(f"User '{username}' has been deleted", 'success')
     return redirect(url_for('main.admin_users'))
+
+
+# ── Admin security panel ──────────────────────────────────────────────────
+
+@main_bp.route('/admin/panel')
+@login_required
+def admin_panel():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+    total_envs    = Environment.query.count()
+    wrapped_envs  = Environment.query.filter_by(key_is_wrapped=True).count()
+    unwrapped_envs = total_envs - wrapped_envs
+
+    return render_template(
+        'admin/panel.html',
+        master_key_loaded=bool(master_key),
+        total_envs=total_envs,
+        wrapped_envs=wrapped_envs,
+        unwrapped_envs=unwrapped_envs,
+    )
+
+
+@main_bp.route('/admin/wrap-keys', methods=['POST'])
+@login_required
+def admin_wrap_keys():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+
+    master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+    if not master_key:
+        return jsonify({'error': 'CONFIGLAKE_MASTER_KEY is not configured on this server'}), 400
+
+    environments = Environment.query.filter_by(key_is_wrapped=False).all()
+    if not environments:
+        return jsonify({'message': 'All environment keys are already wrapped. Nothing to do.'})
+
+    for env in environments:
+        env.secret_key = EncryptionManager.wrap_env_key(env.secret_key, master_key)
+        env.key_is_wrapped = True
+
+    db.session.commit()
+    logger.info("Admin wrapped %d environment key(s).", len(environments))
+    return jsonify({'message': f'{len(environments)} environment key(s) wrapped successfully.'})
+
+
+@main_bp.route('/admin/rotate-key', methods=['POST'])
+@login_required
+def admin_rotate_key():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+
+    data = request.get_json()
+    new_key = (data or {}).get('new_key', '').strip()
+
+    if not new_key:
+        return jsonify({'error': 'new_key is required'}), 422
+
+    if not EncryptionManager.verify_key_format(new_key):
+        return jsonify({'error': 'Invalid Fernet key format. Use the Generate button.'}), 422
+
+    current_master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+    if not current_master_key:
+        return jsonify({'error': 'No master key is currently configured on this server'}), 400
+
+    if new_key == current_master_key:
+        return jsonify({'error': 'New key must be different from the current key'}), 422
+
+    # Re-wrap every wrapped environment key with the new master key.
+    wrapped_envs = Environment.query.filter_by(key_is_wrapped=True).all()
+    for env in wrapped_envs:
+        raw_key = EncryptionManager.unwrap_env_key(env.secret_key, current_master_key)
+        env.secret_key = EncryptionManager.wrap_env_key(raw_key, new_key)
+
+    db.session.commit()
+
+    # Persist the new key to .env.
+    _update_env_file('CONFIGLAKE_MASTER_KEY', new_key)
+
+    logger.info("Master key rotated. %d environment key(s) re-wrapped.", len(wrapped_envs))
+    return jsonify({
+        'message': (
+            f'Master key rotated. {len(wrapped_envs)} environment key(s) re-wrapped. '
+            'Restart the server for the new key to take effect.'
+        ),
+        'restart_required': True,
+    })
+
+
+@main_bp.route('/admin/export')
+@login_required
+def admin_export():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    export_data = BackupManager.create_admin_export()
+    json_bytes = json.dumps(export_data, indent=2).encode('utf-8')
+    buf = io.BytesIO(json_bytes)
+    buf.seek(0)
+
+    from datetime import datetime
+    filename = f"configlake_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/json')
+
+
+@main_bp.route('/admin/import', methods=['POST'])
+@login_required
+def admin_import():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+
+    if 'file' not in request.files or request.files['file'].filename == '':
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    overwrite = request.form.get('overwrite') == 'true'
+
+    try:
+        import_data = json.load(request.files['file'])
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return jsonify({'error': 'Invalid JSON file'}), 400
+
+    try:
+        results = BackupManager.restore_admin_import(import_data, overwrite=overwrite)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 422
+
+    return jsonify({
+        'message': 'Import complete.',
+        'created':     results['created'],
+        'overwritten': results['overwritten'],
+        'skipped':     results['skipped'],
+    })
+
+
+def _update_env_file(key: str, value: str):
+    """Write or update a single key in the root .env file."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+    new_line = f'{key}={value}\n'
+
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith(f'{key}='):
+                lines[i] = new_line
+                updated = True
+                break
+        if not updated:
+            lines.append(new_line)
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+    else:
+        with open(env_path, 'w') as f:
+            f.write(new_line)

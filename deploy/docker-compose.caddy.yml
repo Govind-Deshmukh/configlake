@@ -1,0 +1,61 @@
+# ConfigLake + Caddy – production HTTPS stack
+#
+# Caddy handles TLS automatically (Let's Encrypt).
+#
+# Setup:
+#   1. Edit deploy/Caddyfile — replace YOUR_DOMAIN with your real domain.
+#   2. Create a .env file in the project root (or export the vars):
+#
+#        SECRET_KEY=<random 32-byte hex>
+#        CONFIGLAKE_MASTER_KEY=<Fernet key from setup wizard>
+#
+#   3. docker compose -f deploy/docker-compose.caddy.yml up -d
+#
+# The first time you start, visit https://YOUR_DOMAIN — the setup wizard
+# will walk you through creating the admin account.
+
+version: '3.8'
+
+services:
+  configlake:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: configlake
+    expose:
+      - "5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - CONFIGLAKE_MASTER_KEY=${CONFIGLAKE_MASTER_KEY}
+    volumes:
+      - configlake_data:/app/instance
+      - configlake_backups:/app/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: configlake_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - configlake
+    restart: unless-stopped
+
+volumes:
+  configlake_data:
+  configlake_backups:
+  caddy_data:
+  caddy_config:

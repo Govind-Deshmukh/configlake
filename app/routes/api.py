@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify, g, current_app
 from flask_login import login_required
 from app import db
 from app.models import Project, Environment, Config, Secret, APIToken
@@ -40,28 +40,33 @@ def get_config(project_id, environment_name):
 @api_bp.route('/secrets/<int:project_id>/<environment_name>')
 @require_api_token()
 def get_secrets(project_id, environment_name):
-    """Get all encrypted secrets for a specific project and environment."""
+    """Get all decrypted secrets for a specific project and environment."""
     if g.api_token.project_id != project_id:
         return jsonify({'error': 'Token not valid for this project'}), 403
-    
+
     environment = Environment.query.filter_by(
         project_id=project_id,
         name=environment_name
     ).first()
-    
+
     if not environment or g.api_token.environment_id != environment.id:
         return jsonify({'error': 'Environment not found or not accessible'}), 404
-    
+
     secrets_query = Secret.query.filter_by(environment_id=environment.id).all()
-    
+
+    master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+    enc_key = EncryptionManager.resolve_env_key(environment, master_key)
+
     secret_data = {}
     for secret in secrets_query:
-        secret_data[secret.key] = secret.encrypted_value
-    
+        try:
+            secret_data[secret.key] = EncryptionManager.decrypt_value(secret.encrypted_value, enc_key)
+        except Exception:
+            secret_data[secret.key] = '[DECRYPTION_ERROR]'
+
     return jsonify({
         'project_id': project_id,
         'environment': environment_name,
-        'environment_key': environment.secret_key,
         'secrets': secret_data
     })
 
@@ -88,20 +93,18 @@ def get_all(project_id, environment_name):
         config_data[config.key] = config.value
     
     secret_data = {}
-    encryption_manager = EncryptionManager()
+    master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+    enc_key = EncryptionManager.resolve_env_key(environment, master_key)
     for secret in secrets_query:
         try:
-            # Decrypt the secret for the client since JavaScript Fernet is complex
-            decrypted_value = encryption_manager.decrypt_value(secret.encrypted_value, environment.secret_key)
+            decrypted_value = EncryptionManager.decrypt_value(secret.encrypted_value, enc_key)
             secret_data[secret.key] = decrypted_value
-        except Exception as e:
-            # If decryption fails, still include the key but with an error indication
-            secret_data[secret.key] = f"[DECRYPTION_ERROR: {str(e)}]"
-    
+        except Exception:
+            secret_data[secret.key] = '[DECRYPTION_ERROR]'
+
     return jsonify({
         'project_id': project_id,
         'environment': environment_name,
-        'environment_key': environment.secret_key,
         'configs': config_data,
         'secrets': secret_data
     })
@@ -247,15 +250,16 @@ def manage_config(project_id, environment_name):
                 db.session.add(new_config)
         
         # Handle secrets
-        encryption_manager = EncryptionManager()
+        master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+        enc_key = EncryptionManager.resolve_env_key(environment, master_key)
         for key, value in secrets.items():
             existing_secret = Secret.query.filter_by(
                 environment_id=environment.id,
                 key=key
             ).first()
-            
-            encrypted_value = encryption_manager.encrypt_value(value, environment.secret_key)
-            
+
+            encrypted_value = EncryptionManager.encrypt_value(value, enc_key)
+
             if existing_secret:
                 existing_secret.encrypted_value = encrypted_value
             else:
@@ -265,9 +269,9 @@ def manage_config(project_id, environment_name):
                     encrypted_value=encrypted_value
                 )
                 db.session.add(new_secret)
-        
+
         db.session.commit()
-        
+
         # Verify data was saved
         saved_configs = Config.query.filter_by(environment_id=environment.id).count()
         saved_secrets = Secret.query.filter_by(environment_id=environment.id).count()
@@ -350,15 +354,15 @@ def manage_secret(project_id, environment_name):
         secrets = data.get('secrets', {})
     
     try:
-        # Handle secrets
-        encryption_manager = EncryptionManager()
+        master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+        enc_key = EncryptionManager.resolve_env_key(environment, master_key)
         for key, value in secrets.items():
             existing_secret = Secret.query.filter_by(
                 environment_id=environment.id,
                 key=key
             ).first()
-            
-            encrypted_value = encryption_manager.encrypt_value(value, environment.secret_key)
+
+            encrypted_value = EncryptionManager.encrypt_value(value, enc_key)
             
             if existing_secret:
                 existing_secret.encrypted_value = encrypted_value

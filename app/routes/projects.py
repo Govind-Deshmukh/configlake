@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
 from flask_login import login_required, current_user
 from app import db
 from app.models import Project, Environment, ProjectUser, User, Config, Secret, AllowedIP, APIToken
@@ -90,11 +90,18 @@ def create_environment(project_id):
         
         # Generate encryption key for this environment
         secret_key = EncryptionManager.generate_key()
-        
+        master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+        key_is_wrapped = False
+
+        if master_key:
+            secret_key = EncryptionManager.wrap_env_key(secret_key, master_key)
+            key_is_wrapped = True
+
         environment = Environment(
             name=name,
             project_id=project_id,
-            secret_key=secret_key
+            secret_key=secret_key,
+            key_is_wrapped=key_is_wrapped
         )
         db.session.add(environment)
         db.session.commit()
@@ -634,11 +641,9 @@ def create_secret(project_id, environment_id):
         return jsonify({'error': 'Environment not found'}), 404
     
     try:
-        # Encrypt the secret value
-        encrypted_value = EncryptionManager.encrypt_value(
-            data['value'],
-            environment.secret_key
-        )
+        master_key = current_app.config.get('CONFIGLAKE_MASTER_KEY')
+        enc_key = EncryptionManager.resolve_env_key(environment, master_key)
+        encrypted_value = EncryptionManager.encrypt_value(data['value'], enc_key)
         
         # Check if secret already exists
         secret = Secret.query.filter_by(

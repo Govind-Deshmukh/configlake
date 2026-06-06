@@ -1,0 +1,25 @@
+# ConfigLake – Caddyfile
+#
+# Caddy automatically obtains and renews a TLS certificate from Let's Encrypt.
+# No manual cert management needed.
+#
+# ── Standalone (non-Docker) ────────────────────────────────────────────────
+#
+# Usage:
+#   1. Replace YOUR_DOMAIN with your actual domain.
+#   2. Make sure port 80 and 443 are open and the domain points to this server.
+#   3. Copy this file to /etc/caddy/Caddyfile
+#   4. systemctl reload caddy
+#
+# YOUR_DOMAIN {
+#     reverse_proxy 127.0.0.1:5000
+# }
+#
+# ── Docker (using deploy/docker-compose.caddy.yml) ────────────────────────
+#
+# The service name "configlake" is the Docker-internal hostname.
+# Replace YOUR_DOMAIN before deploying.
+
+YOUR_DOMAIN {
+    reverse_proxy configlake:5000
+}

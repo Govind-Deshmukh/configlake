@@ -40,6 +40,10 @@
                             <li><a class="dropdown-item" href="{{ url_for('projects.list_projects') }}">
                                 <i class="bi bi-folder"></i> All Projects
                             </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('main.admin_panel') }}">
+                                <i class="bi bi-shield-lock"></i> Security Panel
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -61,6 +65,16 @@
             {% endif %}
         </div>
     </nav>
+
+    {% if current_user.is_authenticated and request.scheme == 'http' %}
+    <div class="alert alert-warning alert-dismissible fade show mb-0 rounded-0 text-center" role="alert" style="border-radius:0!important">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>Insecure connection.</strong>
+        ConfigLake is running over HTTP — secrets travel in plaintext.
+        Configure HTTPS before use in production.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
 
     <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}

@@ -52,6 +52,36 @@ class EncryptionManager:
         return secrets.token_urlsafe(32)
     
     @staticmethod
+    def wrap_env_key(env_key: str, master_key: str) -> str:
+        """Encrypt a per-environment key with the master key (envelope encryption)."""
+        fernet = Fernet(master_key.encode() if isinstance(master_key, str) else master_key)
+        wrapped = fernet.encrypt(env_key.encode())
+        return base64.b64encode(wrapped).decode()
+
+    @staticmethod
+    def unwrap_env_key(wrapped_key: str, master_key: str) -> str:
+        """Decrypt a wrapped per-environment key using the master key."""
+        fernet = Fernet(master_key.encode() if isinstance(master_key, str) else master_key)
+        decoded = base64.b64decode(wrapped_key.encode())
+        return fernet.decrypt(decoded).decode()
+
+    @staticmethod
+    def resolve_env_key(environment, master_key: str = None) -> str:
+        """Return the usable Fernet key for an environment.
+
+        Unwraps envelope-encrypted keys when a master key is provided.
+        Falls back to the stored plaintext key for legacy (pre-migration) environments.
+        """
+        if environment.key_is_wrapped:
+            if not master_key:
+                raise ValueError(
+                    "CONFIGLAKE_MASTER_KEY is required to access secrets in this environment "
+                    "(key_is_wrapped=True). Set the env var and restart."
+                )
+            return EncryptionManager.unwrap_env_key(environment.secret_key, master_key)
+        return environment.secret_key
+
+    @staticmethod
     def verify_key_format(key: str):
         """Verify that a key is in the correct format for Fernet."""
         try:

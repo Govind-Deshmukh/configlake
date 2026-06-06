@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConfigLake Setup</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+
+        .setup-container {
+            max-width: 680px;
+            margin: 60px auto;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .step-badge {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .step-badge.active  { background: #0d6efd; color: #fff; }
+        .step-badge.done    { background: #198754; color: #fff; }
+        .step-badge.pending { background: #dee2e6; color: #6c757d; }
+
+        .key-box {
+            font-family: monospace;
+            font-size: 13px;
+            word-break: break-all;
+            background: #1e1e2e;
+            color: #cdd6f4;
+            border-radius: 6px;
+            padding: 14px 16px;
+        }
+
+        .step-panel { display: none; }
+        .step-panel.active { display: block; }
+
+        .progress-steps {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .progress-step {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            background: #dee2e6;
+            transition: background 0.3s;
+        }
+        .progress-step.done   { background: #198754; }
+        .progress-step.active { background: #0d6efd; }
+    </style>
+</head>
+<body>
+<div class="setup-container px-3">
+
+    <div class="text-center mb-4">
+        <h2 class="fw-bold"><i class="bi bi-shield-lock-fill text-primary"></i> ConfigLake Setup</h2>
+        <p class="text-muted">Complete these steps to get started. This wizard runs once.</p>
+    </div>
+
+    <div class="progress-steps">
+        <div class="progress-step active" id="prog-1"></div>
+        <div class="progress-step" id="prog-2"></div>
+        <div class="progress-step" id="prog-3"></div>
+    </div>
+
+    <!-- ── Step 1: Master Key ── -->
+    <div class="step-panel active card shadow-sm" id="step-1">
+        <div class="card-body p-4">
+            <div class="step-header">
+                <div class="step-badge active">1</div>
+                <div>
+                    <h5 class="mb-0">Master Encryption Key</h5>
+                    <small class="text-muted">Protects all secrets stored in ConfigLake</small>
+                </div>
+            </div>
+
+            <p>ConfigLake uses <strong>envelope encryption</strong>: each environment has its own key, but all those keys are wrapped with a single master key that only you control.</p>
+            <p>Generate the master key below, then copy and store it safely (password manager, secrets manager, or a secure note). <strong>If you lose it, your secrets cannot be recovered.</strong></p>
+
+            <div class="mb-3">
+                <button class="btn btn-outline-primary" id="btn-generate" type="button">
+                    <i class="bi bi-key"></i> Generate Key
+                </button>
+            </div>
+
+            <div id="key-section" style="display:none">
+                <label class="form-label fw-semibold">Your master key</label>
+                <div class="key-box mb-2" id="key-display"></div>
+                <button class="btn btn-sm btn-secondary mb-3" id="btn-copy" type="button">
+                    <i class="bi bi-clipboard"></i> Copy to clipboard
+                </button>
+                <div class="alert alert-warning py-2">
+                    <i class="bi bi-info-circle"></i>
+                    This key will be written to your <code>.env</code> file.
+                    For production, move it to a proper secrets manager or inject it as an environment variable.
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="chk-saved">
+                    <label class="form-check-label" for="chk-saved">
+                        I have saved this key somewhere safe
+                    </label>
+                </div>
+            </div>
+
+            <div id="alert-step1" class="alert alert-danger py-2" style="display:none"></div>
+
+            <div class="d-flex justify-content-end">
+                <button class="btn btn-primary" id="btn-next-1" disabled>Next <i class="bi bi-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Step 2: Admin Account ── -->
+    <div class="step-panel card shadow-sm" id="step-2">
+        <div class="card-body p-4">
+            <div class="step-header">
+                <div class="step-badge pending" id="badge-2">2</div>
+                <div>
+                    <h5 class="mb-0">Create Admin Account</h5>
+                    <small class="text-muted">This account will have full access to ConfigLake</small>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-control" id="inp-username" autocomplete="username" minlength="3">
+                <div class="invalid-feedback" id="err-username"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" id="inp-email" autocomplete="email">
+                <div class="invalid-feedback" id="err-email"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-control" id="inp-password" autocomplete="new-password" minlength="8">
+                <div class="invalid-feedback" id="err-password"></div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" class="form-control" id="inp-confirm" autocomplete="new-password">
+                <div class="invalid-feedback" id="err-confirm"></div>
+            </div>
+
+            <div id="alert-step2" class="alert alert-danger py-2" style="display:none"></div>
+
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-outline-secondary" id="btn-back-2" type="button">
+                    <i class="bi bi-arrow-left"></i> Back
+                </button>
+                <button class="btn btn-primary" id="btn-submit" type="button">
+                    <span id="btn-submit-text">Create Account &amp; Finish Setup</span>
+                    <span id="btn-submit-spinner" class="spinner-border spinner-border-sm ms-1" style="display:none" role="status"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let masterKey = '';
+
+    // ── Key generation ──
+    document.getElementById('btn-generate').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-generate');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating…';
+
+        try {
+            const res = await fetch('/setup/generate-key', { method: 'POST' });
+            const data = await res.json();
+            masterKey = data.key;
+            document.getElementById('key-display').textContent = masterKey;
+            document.getElementById('key-section').style.display = 'block';
+            document.getElementById('chk-saved').checked = false;
+            document.getElementById('btn-next-1').disabled = true;
+        } catch {
+            showAlert('alert-step1', 'Failed to generate key. Please refresh and try again.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Regenerate Key';
+        }
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', () => {
+        navigator.clipboard.writeText(masterKey).then(() => {
+            const btn = document.getElementById('btn-copy');
+            btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+            setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard'; }, 2000);
+        });
+    });
+
+    document.getElementById('chk-saved').addEventListener('change', e => {
+        document.getElementById('btn-next-1').disabled = !e.target.checked || !masterKey;
+    });
+
+    // ── Step navigation ──
+    document.getElementById('btn-next-1').addEventListener('click', () => {
+        if (!masterKey) {
+            showAlert('alert-step1', 'Generate a key first.');
+            return;
+        }
+        goToStep(2);
+    });
+
+    document.getElementById('btn-back-2').addEventListener('click', () => goToStep(1));
+
+    function goToStep(n) {
+        document.querySelectorAll('.step-panel').forEach(el => el.classList.remove('active'));
+        document.getElementById(`step-${n}`).classList.add('active');
+
+        document.querySelectorAll('.progress-step').forEach((el, i) => {
+            el.classList.remove('active', 'done');
+            if (i + 1 < n)  el.classList.add('done');
+            if (i + 1 === n) el.classList.add('active');
+        });
+
+        // update badge styles
+        ['badge-2'].forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const stepNum = i + 2;
+            el.classList.remove('active', 'done', 'pending');
+            el.classList.add(stepNum < n ? 'done' : stepNum === n ? 'active' : 'pending');
+        });
+    }
+
+    // ── Form submission ──
+    document.getElementById('btn-submit').addEventListener('click', async () => {
+        clearErrors();
+        const username = document.getElementById('inp-username').value.trim();
+        const email    = document.getElementById('inp-email').value.trim();
+        const password = document.getElementById('inp-password').value;
+        const confirm  = document.getElementById('inp-confirm').value;
+
+        setSubmitting(true);
+        try {
+            const res = await fetch('/setup/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ master_key: masterKey, username, email, password, confirm_password: confirm })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                window.location.href = data.redirect;
+            } else if (res.status === 422 && data.errors) {
+                applyErrors(data.errors);
+            } else {
+                showAlert('alert-step2', data.error || 'Setup failed. Please try again.');
+            }
+        } catch {
+            showAlert('alert-step2', 'Network error. Please try again.');
+        } finally {
+            setSubmitting(false);
+        }
+    });
+
+    function setSubmitting(on) {
+        document.getElementById('btn-submit').disabled = on;
+        document.getElementById('btn-submit-spinner').style.display = on ? 'inline-block' : 'none';
+    }
+
+    function applyErrors(errors) {
+        const map = { username: 'inp-username', email: 'inp-email', password: 'inp-password', confirm_password: 'inp-confirm' };
+        for (const [field, msg] of Object.entries(errors)) {
+            const inputId = map[field];
+            if (inputId) {
+                const el = document.getElementById(inputId);
+                el.classList.add('is-invalid');
+                document.getElementById('err-' + field.replace('_password', '').replace('confirm', 'confirm')).textContent = msg;
+            }
+        }
+    }
+
+    function clearErrors() {
+        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    }
+
+    function showAlert(id, msg) {
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 6000);
+    }
+</script>
+</body>
+</html>
