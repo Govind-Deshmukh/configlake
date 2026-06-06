@@ -1,69 +1,108 @@
 # ConfigLake
 
-A secure, centralized configuration and secrets management platform for modern applications. ConfigLake helps you organize your environment variables, API keys, database connections, and other sensitive data across different environments (development, staging, production) in one secure dashboard.
+A self-hosted secrets and configuration manager for small teams and startups.
+Store environment configs and secrets in one place, pull them at runtime via a
+REST API, and manage everything through a web UI.
+
+**No Consul. No raft consensus. Single Python process + SQLite, running in minutes.**
+
+---
 
 ## What is ConfigLake?
 
-ConfigLake is a Python-based middleware that provides a web dashboard and API for managing application configurations and secrets. Instead of scattered `.env` files or hardcoded values, ConfigLake gives you:
+ConfigLake is a lightweight alternative to Doppler or HashiCorp Vault.
+It gives your applications a single source of truth for configs and secrets
+across environments, with strong encryption, role-based access control, and
+IP whitelisting — without the operational complexity of Vault.
 
-- **One central place** to manage all your app configs
-- **Secure encryption** for sensitive data like passwords and API keys  
-- **Multiple environments** support (dev, staging, prod)
-- **Easy access** via Python and Node.js client libraries
-- **Team collaboration** with role-based permissions
+- **One central dashboard** to manage configs and secrets across all environments
+- **Encryption at rest** using per-environment Fernet keys with optional master-key envelope encryption
+- **Multiple environments** (development, staging, production, etc.)
+- **Team collaboration** with Owner / Maintainer / Reader roles
+- **IP whitelisting** per project or per environment
+- **API token access** for applications — Bearer token + IP whitelist
+- **HTTPS built-in** — self-signed, manual PEM, or terminate at a reverse proxy
+- **Backup & restore** — export/import JSON, encrypted per-project zip
 
-## Features
-
-- **Secure Secret Management**: All secrets are encrypted at rest using environment-specific keys
-- **Multi-Environment Support**: Separate configurations for development, staging, production, etc.
-- **Role-Based Access Control**: Owner, Maintainer, and Reader roles with granular permissions
-- **IP Whitelisting**: Restrict access to specific IP addresses or ranges
-- **API Token Authentication**: Secure programmatic access for applications
-- **Backup & Restore**: Encrypted backups with password protection
-- **Multiple Database Support**: SQLite, MySQL, or PostgreSQL
+---
 
 ## Quick Start
 
-### Option 1: Using Docker (Recommended)
-
-The easiest way to get started:
+### Option 1: Docker (Recommended)
 
 ```bash
-# Pull and run ConfigLake
-docker pull configlake/configlake
-docker run -d --name configlake -p 5000:5000 configlake/configlake
+# Clone the repo
+git clone https://github.com/Govind-Deshmukh/configlake
+cd configlake
 
-# Create admin user
-docker exec -it configlake python app.py create-admin
+# Start the container
+docker compose up -d
 
-# Access at http://localhost:5000
+# Open the setup wizard
+open http://localhost:5000
 ```
+
+The **setup wizard** walks you through:
+
+1. Generating or pasting your master encryption key
+2. Choosing a database (SQLite default, PostgreSQL, MySQL)
+3. Configuring HTTPS (self-signed / manual PEM / behind proxy / HTTP only)
+4. Creating the first admin account
 
 ### Option 2: Manual Installation
 
 ```bash
-# Clone the repository  
+# Clone and install
 git clone https://github.com/Govind-Deshmukh/configlake
 cd configlake
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Setup database and admin user
-python app.py init-db
-python app.py create-admin
-
-# Run the application
-python app.py
+# Run — the setup wizard opens automatically on first launch
+python3 app.py
 ```
 
-Visit `http://localhost:5000` and login with your admin credentials.
+Visit `http://localhost:5000` and complete the setup wizard.
+
+---
+
+## HTTPS Support
+
+ConfigLake supports three HTTPS modes, configured during setup:
+
+| Mode             | How it works                                                            |
+| ---------------- | ----------------------------------------------------------------------- |
+| **Self-signed**  | Generates a 10-year cert automatically. Good for internal / dev use.    |
+| **Manual PEM**   | Paste your own certificate and private key (e.g. from Let's Encrypt).   |
+| **Behind proxy** | Run HTTP internally; terminate TLS at Nginx, Caddy, or a load balancer. |
+
+For production with automatic TLS via Caddy:
+
+```bash
+docker compose -f deploy/docker-compose.caddy.yml up -d
+```
+
+---
+
+## Environment Variables
+
+Set these in a `.env` file at the project root (the setup wizard writes most of them automatically):
+
+| Variable                | Required             | Description                                                    |
+| ----------------------- | -------------------- | -------------------------------------------------------------- |
+| `SECRET_KEY`            | Yes                  | Flask session signing key. Generated by the setup wizard.      |
+| `CONFIGLAKE_MASTER_KEY` | Strongly recommended | Fernet key for envelope encryption of per-environment keys.    |
+| `DATABASE_URL`          | No                   | SQLAlchemy URI. Defaults to `sqlite:///config_manager.db`.     |
+| `SSL_MODE`              | No                   | `self-signed` / `manual` / `proxy` / empty (HTTP only)         |
+| `SSL_CERT_PATH`         | If SSL               | Absolute path to cert.pem                                      |
+| `SSL_KEY_PATH`          | If SSL               | Absolute path to key.pem                                       |
+| `PORT`                  | No                   | Default 5000                                                   |
+| `FLASK_DEBUG`           | No                   | Never set `true` in production — exposes the Werkzeug debugger |
+
+---
 
 ## Client Libraries
 
-ConfigLake provides official client libraries for easy integration:
-
-### Python Client
+### Python
 
 ```bash
 pip install configlake
@@ -72,66 +111,73 @@ pip install configlake
 ```python
 from configlake import getConfig, getSecrets, getAllDetails
 
-# Get configurations only
-configs = getConfig("http://localhost:5000", "your-token", 1, "production")
-db_url = configs["DATABASE_URL"]
+# Configs (non-sensitive, stored plaintext)
+configs = getConfig("https://configlake.example.com", "your-token", 1, "production")
+db_url  = configs["DATABASE_URL"]
 
-# Get secrets only (automatically decrypted)
-secrets = getSecrets("http://localhost:5000", "your-token", 1, "production")
+# Secrets (encrypted at rest, decrypted on read)
+secrets = getSecrets("https://configlake.example.com", "your-token", 1, "production")
 api_key = secrets["API_KEY"]
 
-# Get everything together
-data = getAllDetails("http://localhost:5000", "your-token", 1, "production")
+# Both together
+data = getAllDetails("https://configlake.example.com", "your-token", 1, "production")
 ```
 
-### Node.js Client
+### Node.js
 
 ```bash
 npm install configlake
 ```
 
 ```javascript
-import { getConfig, getSecrets, getAllDetails } from 'configlake';
+import { getConfig, getSecrets, getAllDetails } from "configlake";
 
-// Get configurations only
-const configs = await getConfig("http://localhost:5000", "your-token", 1, "production");
-const dbUrl = configs.DATABASE_URL;
-
-// Get secrets only (automatically decrypted)
-const secrets = await getSecrets("http://localhost:5000", "your-token", 1, "production");
-const apiKey = secrets.API_KEY;
-
-// Get everything together
-const data = await getAllDetails("http://localhost:5000", "your-token", 1, "production");
+const configs = await getConfig(
+  "https://configlake.example.com",
+  "your-token",
+  1,
+  "production",
+);
+const secrets = await getSecrets(
+  "https://configlake.example.com",
+  "your-token",
+  1,
+  "production",
+);
+const data = await getAllDetails(
+  "https://configlake.example.com",
+  "your-token",
+  1,
+  "production",
+);
 ```
+
+---
 
 ## Direct API Access
 
-### Get API Token
-1. Go to `http://localhost:5000/projects/{project_id}/environment/{env_id}`
-2. Click "Create Token" (owner role required)
-3. Copy the generated token
+All API endpoints require a Bearer token and are subject to the project's IP whitelist.
 
-### Retrieve Data
 ```bash
-# Get all data (configs + secrets)
+# All configs + secrets
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:5000/api/all/PROJECT_ID/ENVIRONMENT_NAME
+  https://configlake.example.com/api/all/PROJECT_ID/ENVIRONMENT_NAME
 
-# Get configs only
+# Configs only
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:5000/api/config/PROJECT_ID/ENVIRONMENT_NAME
+  https://configlake.example.com/api/config/PROJECT_ID/ENVIRONMENT_NAME
 
-# Get secrets only
+# Secrets only (returned decrypted)
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:5000/api/secrets/PROJECT_ID/ENVIRONMENT_NAME
+  https://configlake.example.com/api/secrets/PROJECT_ID/ENVIRONMENT_NAME
 ```
 
-### Example Response
+### Example response
+
 ```json
 {
   "project_id": 1,
-  "environment": "production", 
+  "environment": "production",
   "configs": {
     "DATABASE_URL": "postgresql://...",
     "API_ENDPOINT": "https://api.example.com"
@@ -143,160 +189,91 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 }
 ```
 
+### Get an API token
+
+1. Open your project → select an environment
+2. Click **Create Token** (Owner role required)
+3. Copy the token — it is shown only once
+
+---
+
 ## User Roles
 
-ConfigLake has three user roles for team collaboration:
+| Role           | Permissions                                                |
+| -------------- | ---------------------------------------------------------- |
+| **Owner**      | Full control — manage users, security settings, API tokens |
+| **Maintainer** | Create / edit / delete configs and secrets                 |
+| **Reader**     | View-only access                                           |
 
-- **Owner**: Full access - manage users, projects, security settings
-- **Maintainer**: Can create/edit/delete configs and secrets  
-- **Reader**: View-only access to configurations and secrets
+Admin users bypass all role checks and have access to every project.
 
-## Security Features
-
-- **Encryption at Rest**: Secrets are encrypted using environment-specific keys
-- **IP Whitelisting**: Restrict API access to specific IP addresses
-- **API Token Authentication**: Secure token-based authentication
-- **Role-Based Access**: Control what users can see and modify
-- **Secure Backups**: Encrypted backup system with password protection
+---
 
 ## Database Support
 
-ConfigLake works with multiple database types:
+| Database             | Use case                                    |
+| -------------------- | ------------------------------------------- |
+| **SQLite** (default) | Getting started, single-server, low traffic |
+| **PostgreSQL**       | Recommended for production                  |
+| **MySQL**            | Alternative production option               |
 
-- **SQLite** (default): Perfect for getting started, no setup required
-- **PostgreSQL** (recommended for production): Best performance and features
-- **MySQL**: Alternative production database option
-
-### Database Configuration
-
-Set your database type using environment variables:
+Configure via the setup wizard or environment variables:
 
 ```bash
-# SQLite (default)
-DATABASE_TYPE=sqlite
-
-# PostgreSQL  
-DATABASE_TYPE=postgresql
-PG_HOST=localhost
-PG_PORT=5432
-PG_USER=configlake
-PG_PASSWORD=your_password
-PG_DB=configlake
+# PostgreSQL
+DATABASE_URL=postgresql+psycopg2://user:password@host:5432/configlake
 
 # MySQL
-DATABASE_TYPE=mysql  
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=configlake
-MYSQL_PASSWORD=your_password
-MYSQL_DB=configlake
+DATABASE_URL=mysql+pymysql://user:password@host:3306/configlake
 ```
+
+---
 
 ## Docker Deployment
 
-ConfigLake is available as a Docker image for easy deployment:
-
-### Basic Docker Run
+### Basic (SQLite, HTTP)
 
 ```bash
-# Run with default SQLite database
-docker run -d \
-  --name configlake \
-  -p 5000:5000 \
-  -v configlake_data:/app/instance \
-  -e SECRET_KEY="your-secret-key" \
-  configlake/configlake
-
-# Create admin user
-docker exec -it configlake python app.py create-admin
+docker compose up -d
 ```
 
-### Docker Compose (Recommended)
+Visit `http://localhost:5000` and complete the setup wizard.
 
-Create a `docker-compose.yml` file:
+### With PostgreSQL
 
-```yaml
-version: '3.8'
-services:
-  configlake:
-    image: configlake/configlake:latest
-    ports:
-      - "5000:5000"
-    volumes:
-      - configlake_data:/app/instance
-      - configlake_backups:/app/backups
-    environment:
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_TYPE=postgresql
-      - PG_HOST=postgres
-      - PG_USER=configlake
-      - PG_PASSWORD=${DB_PASSWORD}
-      - PG_DB=configlake
-    depends_on:
-      - postgres
+Uncomment the `postgres` service in `docker-compose.yml`, then:
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: configlake
-      POSTGRES_USER: configlake  
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  configlake_data:
-  configlake_backups:
-  postgres_data:
+```bash
+cp .env.example .env
+# Edit .env — set SECRET_KEY, CONFIGLAKE_MASTER_KEY, DB_PASSWORD
+docker compose up -d
 ```
 
-Run with: `docker-compose up -d`
+### With automatic HTTPS via Caddy
 
-## Getting Started Guide
+```bash
+# Edit deploy/Caddyfile — replace YOUR_DOMAIN with your real domain
+cp .env.example .env
+# Edit .env — set SECRET_KEY and CONFIGLAKE_MASTER_KEY
 
-### 1. Set Up ConfigLake
-Choose your preferred method:
-- **Docker**: `docker run configlake/configlake` (easiest)
-- **Manual**: Clone repository and run `python app.py`
-
-### 2. Access the Dashboard  
-Open `http://localhost:5000` and login with admin credentials.
-
-### 3. Create Your First Project
-1. Click "Create Project" 
-2. Add environments (development, staging, production)
-3. Add team members with appropriate roles
-
-### 4. Add Configuration Data
-- **Configs**: Non-sensitive settings (database URLs, API endpoints)
-- **Secrets**: Sensitive data (passwords, API keys) - automatically encrypted
-
-### 5. Generate API Token
-Create tokens for your applications to access the data programmatically.
-
-### 6. Integrate with Your App
-Install the client library and fetch your configuration:
-
-```python
-# Python
-from configlake import getAllDetails
-data = getAllDetails("http://localhost:5000", "token", project_id, "production")
+docker compose -f deploy/docker-compose.caddy.yml up -d
 ```
 
-```javascript
-// Node.js  
-import { getAllDetails } from 'configlake';
-const data = await getAllDetails("http://localhost:5000", "token", projectId, "production");
-```
+Caddy handles Let's Encrypt certificates automatically. The setup wizard
+runs at `https://YOUR_DOMAIN` on first launch.
 
-## Production Deployment
+---
 
-For production use:
-1. Use PostgreSQL or MySQL database (not SQLite)
-2. Set strong `SECRET_KEY` and `ENCRYPTION_KEY`
-3. Enable HTTPS with reverse proxy (nginx/Apache)
-4. Configure IP whitelisting for security
-5. Set up regular backups
+## Production Checklist
+
+- [ ] Complete the setup wizard (generates `SECRET_KEY` and `CONFIGLAKE_MASTER_KEY`)
+- [ ] Use PostgreSQL or MySQL (not SQLite) for multi-process or high-availability setups
+- [ ] Enable HTTPS — self-signed for internal, Caddy/Nginx for public-facing
+- [ ] Wrap all environment keys via **Admin Panel → Encryption → Wrap All Keys**
+- [ ] Configure IP whitelisting on every project before issuing API tokens
+- [ ] Set up regular database backups (Admin Panel → Backup & Restore)
+
+---
 
 ## Support & Links
 
@@ -304,8 +281,8 @@ For production use:
 - **Python Package**: `pip install configlake`
 - **NPM Package**: `npm install configlake`
 - **GitHub Issues**: Report bugs and feature requests
-- **Documentation**: See [DOCKER.md](./DOCKER.md) for detailed Docker instructions
+- **Caddy deployment**: See `deploy/docker-compose.caddy.yml` and `deploy/Caddyfile`
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License — see LICENSE file for details.

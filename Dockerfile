@@ -1,51 +1,45 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Set maintainer information
 LABEL maintainer="Govind Deshmukh <govind.ub47@gmail.com>"
-LABEL description="ConfigLake - Centralized configuration and secrets management"
-LABEL version="1.0.0"
+LABEL description="ConfigLake - Self-hosted secrets and configuration manager"
+LABEL version="1.0.1"
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV FLASK_APP=app.py
-ENV FLASK_ENV=production
+# Never enable debug in the image — callers can override if truly needed
+ENV FLASK_DEBUG=0
 
-# Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# curl is needed for the HEALTHCHECK; gcc for any C-extension wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
 COPY . .
 
-# Create directories for data persistence
-RUN mkdir -p /app/instance /app/backups
+# Directories the app writes to at runtime
+RUN mkdir -p /app/instance /app/backups /app/certs
 
-# Make startup script executable
 RUN chmod +x startup.sh
 
-# Create non-root user for security
+# Non-root user — created before chown so the layer is minimal
 RUN useradd -m -u 1000 configlake && \
     chown -R configlake:configlake /app
+
 USER configlake
 
-# Expose port
-EXPOSE 5000
+# 5000 = HTTP / Flask dev server
+# 443  = HTTPS when SSL_MODE=self-signed or manual
+EXPOSE 5000 443
 
-# Health check
+# HEAD /auth/login avoids the redirect on / and doesn't require auth
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:5000/ || exit 1
+    CMD curl -fsk http://localhost:5000/auth/login || exit 1
 
-# Default command - run startup script
 CMD ["./startup.sh"]
