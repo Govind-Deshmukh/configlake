@@ -26,6 +26,7 @@
 
                     <!-- Add IP Form -->
                     <form method="POST" action="{{ url_for('projects.add_allowed_ip', project_id=project.id) }}" class="mb-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="mb-3">
@@ -81,7 +82,8 @@
                                         </td>
                                         <td>
                                             <form method="POST" action="{{ url_for('projects.remove_allowed_ip', project_id=project.id, ip_id=ip.id) }}" style="display: inline;">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
                                                         onclick="return confirm('Remove IP {{ ip.ip_address }}?')">
                                                     <i class="fas fa-trash"></i> Remove
                                                 </button>

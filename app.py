@@ -109,25 +109,65 @@ def _run_server(argv):
     ssl_context = None
     if args.ssl_cert and args.ssl_key:
         ssl_context = (args.ssl_cert, args.ssl_key)
-        print(f"Starting ConfigLake with SSL certificate: {args.ssl_cert}")
+        print(f"SSL: using provided certificate ({args.ssl_cert})")
     elif args.ssl:
         ssl_context = 'adhoc'
-        print("Starting ConfigLake with a self-signed certificate (development only).")
+        print("SSL: auto-generated self-signed certificate (dev mode).")
         print("Your browser will show a security warning — accept it to proceed.")
     else:
-        print("Starting ConfigLake over HTTP.")
-        print("For production, terminate TLS at a reverse proxy (see deploy/).")
+        # Read SSL config written by the setup wizard
+        ssl_mode = os.environ.get('SSL_MODE', '')
+        ssl_cert = os.environ.get('SSL_CERT_PATH', '')
+        ssl_key  = os.environ.get('SSL_KEY_PATH', '')
+        if ssl_mode in ('self-signed', 'manual') and ssl_cert and ssl_key:
+            if os.path.isfile(ssl_cert) and os.path.isfile(ssl_key):
+                ssl_context = (ssl_cert, ssl_key)
+                print(f"SSL: using certificate from setup configuration ({ssl_cert})")
+            else:
+                print(f"Warning: SSL_MODE={ssl_mode} but cert/key files not found. Running over HTTP.")
+                print(f"  SSL_CERT_PATH={ssl_cert}")
+                print(f"  SSL_KEY_PATH={ssl_key}")
+        elif ssl_mode == 'proxy':
+            print("HTTP: TLS terminated by reverse proxy — running plain HTTP internally.")
+        else:
+            print("HTTP: no SSL configured.")
+            print("Run the setup wizard or use --ssl to enable HTTPS.")
 
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(host='0.0.0.0', port=port, debug=debug, ssl_context=ssl_context)
 
 
+_RESTART_CODE = 42   # child exits with this code to request a restart
+
+
+def _supervisor(argv):
+    """
+    Run the server as a child subprocess so a clean restart is possible.
+
+    When the child exits with _RESTART_CODE the supervisor relaunches it.
+    Any other exit code (0, 1, SIGINT …) propagates and the supervisor exits.
+
+    This avoids the 'Address already in use' problem: the child process holds
+    the socket; when it exits the OS releases the port before the new child
+    starts.
+    """
+    import subprocess
+    child_cmd = [sys.executable, __file__, '--_child'] + argv
+    while True:
+        try:
+            result = subprocess.run(child_cmd)
+        except KeyboardInterrupt:
+            break
+        if result.returncode != _RESTART_CODE:
+            sys.exit(result.returncode)
+        print('\nConfigLake is restarting…\n')
+
+
 if __name__ == '__main__':
-    # Commands are plain positional words; server flags start with '--'.
+    # ── CLI commands (never need the supervisor loop) ──────────────────────
     if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
         command = sys.argv[1]
-
         if command == 'init-db':
             init_db()
         elif command == 'create-admin':
@@ -139,13 +179,20 @@ if __name__ == '__main__':
         else:
             print("Available commands:")
             print("  python app.py init-db      - Initialize the database schema")
-            print("  python app.py create-admin - Create an admin user (CLI alternative to setup wizard)")
+            print("  python app.py create-admin - Create an admin user")
             print("  python app.py migrate-db   - Add new columns to an existing database")
             print("  python app.py wrap-keys    - Encrypt all environment keys with CONFIGLAKE_MASTER_KEY")
             print()
-            print("Server flags (used without a command):")
+            print("Server flags:")
             print("  python app.py              - Start over HTTP")
             print("  python app.py --ssl        - Start with a self-signed certificate (dev)")
             print("  python app.py --ssl-cert cert.pem --ssl-key key.pem  - Start with your own cert")
+
+    # ── Internal child flag: actually run Flask (spawned by supervisor) ────
+    elif '--_child' in sys.argv:
+        child_argv = [a for a in sys.argv[1:] if a != '--_child']
+        _run_server(child_argv)
+
+    # ── Normal start: become the supervisor ───────────────────────────────
     else:
-        _run_server(sys.argv[1:])
+        _supervisor(sys.argv[1:])

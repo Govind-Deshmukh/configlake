@@ -70,6 +70,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <form method="POST" action="{{ url_for('projects.delete_config', project_id=project.id, environment_id=environment.id, config_key=config.key) }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this configuration?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
@@ -118,6 +119,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <form method="POST" action="{{ url_for('projects.delete_secret', project_id=project.id, environment_id=environment.id, secret_key=secret.key) }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this secret?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
@@ -547,10 +549,11 @@ document.getElementById('addIpForm')?.addEventListener('submit', async function(
     e.preventDefault();
     const ipAddress   = document.getElementById('ipAddress').value;
     const description = document.getElementById('ipDescription').value;
+    const csrfToken   = document.querySelector('meta[name="csrf-token"]').content;
     try {
         const res = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
             body: new URLSearchParams({ ip_address: ipAddress, description: description || '' })
         });
         if (res.ok) {
@@ -592,8 +595,12 @@ async function loadCurrentIps() {
 
 async function removeIp(ipId) {
     if (!confirm('Remove this IP from the whitelist?')) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     try {
-        const res = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip/${ipId}`, { method: 'DELETE' });
+        const res = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip/${ipId}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken },
+        });
         if (res.ok) {
             loadCurrentIps();
             showToast('IP removed.');

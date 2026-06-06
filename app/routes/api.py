@@ -205,7 +205,7 @@ def toggle_api_token(project_id, environment_id, token_id):
 # Configuration and Secrets Management endpoints
 @api_bp.route('/manage/config/<int:project_id>/<environment_name>', methods=['POST'])
 @login_required
-@require_project_permission('write')
+@require_project_permission('maintainer')
 def manage_config(project_id, environment_name):
     """Save/update configurations and secrets for an environment."""
     data = request.get_json()
@@ -290,7 +290,7 @@ def manage_config(project_id, environment_name):
 
 @api_bp.route('/manage/config/<int:project_id>/<environment_name>/<key>', methods=['DELETE'])
 @login_required
-@require_project_permission('write')
+@require_project_permission('maintainer')
 def delete_config_key(project_id, environment_name, key):
     """Delete a specific configuration or secret key."""
     environment = Environment.query.filter_by(
@@ -329,7 +329,7 @@ def delete_config_key(project_id, environment_name, key):
 # Separate endpoints for configs and secrets (for backward compatibility with templates)
 @api_bp.route('/manage/secret/<int:project_id>/<environment_name>', methods=['POST'])
 @login_required
-@require_project_permission('write')
+@require_project_permission('maintainer')
 def manage_secret(project_id, environment_name):
     """Save/update secrets for an environment."""
     data = request.get_json()

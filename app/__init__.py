@@ -2,11 +2,13 @@ from flask import Flask, redirect, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_cors import CORS
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 
 db = SQLAlchemy()
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 def create_app():
     app = Flask(__name__)
@@ -14,21 +16,22 @@ def create_app():
 
     # Trust X-Forwarded-Proto and X-Forwarded-For from a single upstream proxy
     # so request.scheme reflects https when Nginx/Caddy terminates TLS.
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-    
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)
+
     # Configure CORS to handle all requests
     CORS(app, origins=[], supports_credentials=True)
-    
+
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
     login_manager.login_view = 'auth.login'
-    
+
     from app.models import User
-    
+
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
-    
+
     from app.routes.auth import auth_bp
     from app.routes.projects import projects_bp
     from app.routes.api import api_bp
@@ -40,6 +43,15 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(main_bp)
     app.register_blueprint(setup_bp, url_prefix='/setup')
+
+    # API endpoints use Bearer tokens; setup has its own _setup_only() guard.
+    csrf.exempt(api_bp)
+    csrf.exempt(setup_bp)
+
+    # Auto-init and migrate after all models are registered with the metadata.
+    with app.app_context():
+        db.create_all()
+        _auto_migrate(app)
 
     @app.before_request
     def redirect_to_setup_if_needed():
@@ -95,3 +107,20 @@ def create_app():
         return response
     
     return app
+
+
+def _auto_migrate(app):
+    """Add columns introduced in upgrades to an existing database (idempotent)."""
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('environment')]
+        if 'key_is_wrapped' not in columns:
+            with db.engine.connect() as conn:
+                conn.execute(text(
+                    'ALTER TABLE environment ADD COLUMN key_is_wrapped BOOLEAN NOT NULL DEFAULT 0'
+                ))
+                conn.commit()
+            app.logger.info("DB migration: added 'key_is_wrapped' column.")
+    except Exception:
+        pass  # Table doesn't exist yet — db.create_all() just ran or will handle it

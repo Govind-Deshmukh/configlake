@@ -7,170 +7,468 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
+        body { background: #f0f2f5; }
+        .wizard-wrap { max-width: 660px; margin: 40px auto; padding: 0 16px 80px; }
 
-        .setup-container {
-            max-width: 680px;
-            margin: 60px auto;
+        .step-bar { display: flex; align-items: center; margin-bottom: 28px; }
+        .step-item { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+        .step-item:not(:last-child)::after {
+            content: ''; position: absolute; top: 18px; left: 60%; width: 80%;
+            height: 2px; background: #dee2e6; z-index: 0;
         }
-
-        .step-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 28px;
+        .step-item.done::after { background: #0d6efd; }
+        .step-circle {
+            width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: .85rem; z-index: 1;
+            border: 2px solid #dee2e6; background: #fff; color: #6c757d;
         }
+        .step-item.active .step-circle { border-color: #0d6efd; color: #0d6efd; background: #e7f1ff; }
+        .step-item.done   .step-circle { border-color: #0d6efd; background: #0d6efd; color: #fff; }
+        .step-label { font-size: .72rem; margin-top: 4px; color: #6c757d; white-space: nowrap; }
+        .step-item.active .step-label,
+        .step-item.done   .step-label { color: #0d6efd; font-weight: 600; }
 
-        .step-badge {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 15px;
-            flex-shrink: 0;
+        .type-card {
+            cursor: pointer; border: 2px solid #dee2e6; border-radius: 12px;
+            padding: 22px 16px; transition: .15s; text-align: center;
         }
+        .type-card:hover  { border-color: #86b7fe; background: #f8fbff; }
+        .type-card.chosen { border-color: #0d6efd; background: #e7f1ff; }
 
-        .step-badge.active  { background: #0d6efd; color: #fff; }
-        .step-badge.done    { background: #198754; color: #fff; }
-        .step-badge.pending { background: #dee2e6; color: #6c757d; }
+        .opt-card {
+            cursor: pointer; border: 2px solid #dee2e6; border-radius: 10px;
+            padding: 16px; transition: .15s;
+        }
+        .opt-card:hover    { border-color: #86b7fe; }
+        .opt-card.selected { border-color: #0d6efd; background: #f0f6ff; }
 
         .key-box {
-            font-family: monospace;
-            font-size: 13px;
-            word-break: break-all;
-            background: #1e1e2e;
-            color: #cdd6f4;
-            border-radius: 6px;
-            padding: 14px 16px;
+            font-family: monospace; font-size: .82rem; background: #1e1e2e;
+            color: #cdd6f4; padding: 14px 16px; border-radius: 8px;
+            word-break: break-all; display: none;
         }
-
-        .step-panel { display: none; }
-        .step-panel.active { display: block; }
-
-        .progress-steps {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 32px;
-        }
-
-        .progress-step {
-            flex: 1;
-            height: 4px;
-            border-radius: 2px;
-            background: #dee2e6;
-            transition: background 0.3s;
-        }
-        .progress-step.done   { background: #198754; }
-        .progress-step.active { background: #0d6efd; }
     </style>
 </head>
 <body>
-<div class="setup-container px-3">
+<div class="wizard-wrap">
 
     <div class="text-center mb-4">
-        <h2 class="fw-bold"><i class="bi bi-shield-lock-fill text-primary"></i> ConfigLake Setup</h2>
-        <p class="text-muted">Complete these steps to get started. This wizard runs once.</p>
+        <i class="bi bi-shield-lock-fill text-primary" style="font-size:2.4rem"></i>
+        <h4 class="fw-bold mt-2 mb-0">Welcome to ConfigLake</h4>
+        <p class="text-muted small">One-time setup</p>
     </div>
 
-    <div class="progress-steps">
-        <div class="progress-step active" id="prog-1"></div>
-        <div class="progress-step" id="prog-2"></div>
-        <div class="progress-step" id="prog-3"></div>
-    </div>
+    <!-- Progress bar -->
+    <div class="step-bar" id="stepBar" style="display:none"></div>
 
-    <!-- ── Step 1: Master Key ── -->
-    <div class="step-panel active card shadow-sm" id="step-1">
+    <!-- ═══════════════════════════════════════════════
+         STEP 0 — Setup type
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-type">
         <div class="card-body p-4">
-            <div class="step-header">
-                <div class="step-badge active">1</div>
-                <div>
-                    <h5 class="mb-0">Master Encryption Key</h5>
-                    <small class="text-muted">Protects all secrets stored in ConfigLake</small>
+            <h5 class="fw-bold mb-1">What are you setting up?</h5>
+            <p class="text-muted small mb-4">This determines which steps you'll go through.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="type-card" id="type-fresh" onclick="chooseType('fresh')">
+                        <i class="bi bi-stars text-primary" style="font-size:2rem"></i>
+                        <h6 class="fw-bold mt-2 mb-1">Fresh Installation</h6>
+                        <p class="text-muted small mb-0">New server, empty database. Set up everything from scratch.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="type-card" id="type-migration" onclick="chooseType('migration')">
+                        <i class="bi bi-box-arrow-in-right text-success" style="font-size:2rem"></i>
+                        <h6 class="fw-bold mt-2 mb-1">Migration / Restore</h6>
+                        <p class="text-muted small mb-0">Moving to a new server, restoring a backup, or upgrading an existing instance.</p>
+                    </div>
                 </div>
             </div>
-
-            <p>ConfigLake uses <strong>envelope encryption</strong>: each environment has its own key, but all those keys are wrapped with a single master key that only you control.</p>
-            <p>Generate the master key below, then copy and store it safely (password manager, secrets manager, or a secure note). <strong>If you lose it, your secrets cannot be recovered.</strong></p>
-
-            <div class="mb-3">
-                <button class="btn btn-outline-primary" id="btn-generate" type="button">
-                    <i class="bi bi-key"></i> Generate Key
-                </button>
-            </div>
-
-            <div id="key-section" style="display:none">
-                <label class="form-label fw-semibold">Your master key</label>
-                <div class="key-box mb-2" id="key-display"></div>
-                <button class="btn btn-sm btn-secondary mb-3" id="btn-copy" type="button">
-                    <i class="bi bi-clipboard"></i> Copy to clipboard
-                </button>
-                <div class="alert alert-warning py-2">
-                    <i class="bi bi-info-circle"></i>
-                    This key will be written to your <code>.env</code> file.
-                    For production, move it to a proper secrets manager or inject it as an environment variable.
-                </div>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="chk-saved">
-                    <label class="form-check-label" for="chk-saved">
-                        I have saved this key somewhere safe
-                    </label>
-                </div>
-            </div>
-
-            <div id="alert-step1" class="alert alert-danger py-2" style="display:none"></div>
-
-            <div class="d-flex justify-content-end">
-                <button class="btn btn-primary" id="btn-next-1" disabled>Next <i class="bi bi-arrow-right"></i></button>
-            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end bg-transparent">
+            <button class="btn btn-primary" id="btnTypeNext" disabled onclick="startWizard()">
+                Continue <i class="bi bi-arrow-right"></i>
+            </button>
         </div>
     </div>
 
-    <!-- ── Step 2: Admin Account ── -->
-    <div class="step-panel card shadow-sm" id="step-2">
+    <!-- ═══════════════════════════════════════════════
+         FRESH — Step 1: Master Key
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-fresh-key" style="display:none">
         <div class="card-body p-4">
-            <div class="step-header">
-                <div class="step-badge pending" id="badge-2">2</div>
-                <div>
-                    <h5 class="mb-0">Create Admin Account</h5>
-                    <small class="text-muted">This account will have full access to ConfigLake</small>
+            <h5 class="fw-bold mb-1">Master Encryption Key</h5>
+            <p class="text-muted small mb-3">
+                ConfigLake uses this key to protect all stored secrets.
+                It is never sent over the network or saved in the database — only in your <code>.env</code> file.
+            </p>
+            <button class="btn btn-outline-primary mb-3" id="btnGenKeyFresh" type="button">
+                <i class="bi bi-key"></i> Generate Key
+            </button>
+            <div class="key-box mb-3" id="keyDisplayFresh"></div>
+            <div id="copyWrapFresh" style="display:none" class="mb-3">
+                <button class="btn btn-sm btn-secondary" id="btnCopyKeyFresh">
+                    <i class="bi bi-clipboard"></i> Copy to clipboard
+                </button>
+                <span id="copiedBadgeFresh" class="badge bg-success ms-2" style="display:none">Copied!</span>
+            </div>
+            <div class="form-check" id="ackWrapFresh" style="display:none">
+                <input class="form-check-input" type="checkbox" id="chkAckFresh">
+                <label class="form-check-label" for="chkAckFresh">
+                    I have saved this key — I understand it cannot be recovered if lost
+                </label>
+            </div>
+            <div class="alert alert-warning py-2 mt-3 small" id="keyWarningFresh" style="display:none">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                Copy this key before continuing. Losing it makes all secrets unrecoverable.
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" onclick="backToType()"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-primary" id="btnFreshKeyNext" disabled>Next <i class="bi bi-arrow-right"></i></button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SHARED — Database step
+         Used by: Fresh step 2, Migration step 1
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-db" style="display:none">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-1" id="db-card-title">Database</h5>
+            <p class="text-muted small mb-1" id="db-card-desc">Choose where ConfigLake stores its data.</p>
+            <div id="db-mig-notice" class="alert alert-info py-2 small mb-3" style="display:none">
+                <i class="bi bi-info-circle"></i>
+                Point to your <strong>existing database</strong>. Tables will be created or upgraded automatically — existing data is preserved.
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="opt-card selected" id="card-sqlite" onclick="selectDb('sqlite')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-database-fill text-success fs-5"></i>
+                            <div>
+                                <strong>SQLite</strong>
+                                <span class="badge bg-success ms-1" style="font-size:.67rem">Recommended for single-server</span>
+                                <div class="text-muted small">Built-in, zero configuration. Data stored as a local file.</div>
+                            </div>
+                        </div>
+                        <div id="sqlite-options" class="mt-3">
+                            <label class="form-label small fw-semibold">
+                                Database file path
+                                <span class="text-muted fw-normal">(optional — leave blank for default)</span>
+                            </label>
+                            <input type="text" class="form-control form-control-sm font-monospace" id="db_path"
+                                placeholder="configlake.db  (default)">
+
+                            <!-- Migration only: upload a .db file from local machine -->
+                            <div id="sqlite-upload-section" style="display:none" class="mt-3 pt-3 border-top">
+                                <label class="form-label small fw-semibold">
+                                    Upload existing database file
+                                    <span class="text-muted fw-normal">(from your old server)</span>
+                                </label>
+                                <div class="input-group input-group-sm">
+                                    <input type="file" class="form-control" id="sqlite-db-file" accept=".db">
+                                    <button class="btn btn-outline-secondary" id="btnUploadDb" type="button" onclick="uploadDbFile()">
+                                        <i class="bi bi-upload"></i> Upload
+                                    </button>
+                                </div>
+                                <div id="db-upload-status" class="small mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="card-postgresql" onclick="selectDb('postgresql')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-database-fill text-primary fs-5"></i>
+                            <div>
+                                <strong>PostgreSQL</strong>
+                                <div class="text-muted small">Recommended for production and multi-instance deployments.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="card-mysql" onclick="selectDb('mysql')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-database-fill text-warning fs-5"></i>
+                            <div>
+                                <strong>MySQL / MariaDB</strong>
+                                <div class="text-muted small">Compatible with MySQL 5.7+ and MariaDB 10.3+.</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
+            <div id="remote-db-fields" style="display:none" class="border rounded p-3 bg-light mb-3">
+                <div class="row g-2">
+                    <div class="col-8">
+                        <label class="form-label small fw-semibold">Host</label>
+                        <input type="text" class="form-control form-control-sm" id="db_host" value="localhost">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small fw-semibold">Port</label>
+                        <input type="number" class="form-control form-control-sm" id="db_port" value="5432">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Username</label>
+                        <input type="text" class="form-control form-control-sm" id="db_user" autocomplete="off">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-semibold">Password</label>
+                        <input type="password" class="form-control form-control-sm" id="db_password" autocomplete="new-password">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-semibold">Database name</label>
+                        <input type="text" class="form-control form-control-sm" id="db_name" value="configlake">
+                    </div>
+                </div>
+                <div class="mt-3 d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" id="btnTestDb" type="button" onclick="testDbConnection()">
+                        <i class="bi bi-plug"></i> Test Connection
+                    </button>
+                    <span id="dbTestStatus" class="small"></span>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" id="db-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-primary" id="db-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         MIGRATION — Step 2: Master Key
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-mig-key" style="display:none">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-1">Master Encryption Key</h5>
+            <p class="text-muted small mb-3">How was your previous instance configured?</p>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="opt-card selected" id="mig-key-existing" onclick="selectMigKey('existing')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-key-fill text-primary fs-5"></i>
+                            <div>
+                                <strong>I have my existing master key</strong>
+                                <div class="text-muted small">Your old instance had <code>CONFIGLAKE_MASTER_KEY</code> configured.</div>
+                            </div>
+                        </div>
+                        <div id="mig-paste-key-wrap" class="mt-3">
+                            <label class="form-label small fw-semibold">Paste your existing master key</label>
+                            <input type="text" class="form-control form-control-sm font-monospace"
+                                id="mig_existing_key" autocomplete="off"
+                                placeholder="Fernet key — base64 URL-safe, ends with =">
+                            <div class="invalid-feedback" id="err-mig_existing_key"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="mig-key-new" onclick="selectMigKey('new')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-plus-circle text-success fs-5"></i>
+                            <div>
+                                <strong>No master key — generate one now</strong>
+                                <div class="text-muted small">
+                                    Your old instance ran without a master key (pre-v2 install).
+                                    After setup, use <strong>Security Panel → Wrap All Keys</strong> to protect existing data.
+                                </div>
+                            </div>
+                        </div>
+                        <div id="mig-gen-key-wrap" style="display:none" class="mt-3">
+                            <button class="btn btn-sm btn-outline-primary mb-2" id="btnGenKeyMig" type="button">
+                                <i class="bi bi-key"></i> Generate Key
+                            </button>
+                            <div class="key-box mb-2" id="keyDisplayMig"></div>
+                            <div id="copyWrapMig" style="display:none" class="mb-2">
+                                <button class="btn btn-sm btn-secondary" id="btnCopyKeyMig">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                                <span id="copiedBadgeMig" class="badge bg-success ms-2" style="display:none">Copied!</span>
+                            </div>
+                            <div class="form-check" id="ackWrapMig" style="display:none">
+                                <input class="form-check-input" type="checkbox" id="chkAckMig">
+                                <label class="form-check-label small" for="chkAckMig">I have saved this key safely</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="mig-key-error" class="alert alert-danger py-2 small" style="display:none"></div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" onclick="show('card-db'); updateBar(MIG_STEPS, 1)"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-primary" onclick="validateMigKey()">Next <i class="bi bi-arrow-right"></i></button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SHARED — HTTPS step
+         Used by: Fresh step 3, Migration step 3
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-ssl" style="display:none">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-1">HTTPS / Security</h5>
+            <p class="text-muted small mb-3">ConfigLake stores secrets — they must be protected in transit.</p>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="opt-card selected" id="card-self-signed" onclick="selectSsl('self-signed')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-shield-check text-success fs-5"></i>
+                            <div>
+                                <strong>Self-signed certificate</strong>
+                                <span class="badge bg-success ms-1" style="font-size:.67rem">Easiest setup</span>
+                                <div class="text-muted small">
+                                    ConfigLake generates a certificate automatically and saves it to <code>certs/</code>.
+                                    Your browser will show a one-time warning — click "Advanced → Proceed".
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="card-manual" onclick="selectSsl('manual')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-file-earmark-lock2 text-primary fs-5"></i>
+                            <div>
+                                <strong>My own certificate</strong>
+                                <div class="text-muted small">You have a certificate from Let's Encrypt, ZeroSSL, or another CA.</div>
+                            </div>
+                        </div>
+                        <div id="manual-cert-fields" style="display:none" class="mt-3">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold">
+                                    Certificate
+                                    <span class="text-muted fw-normal">(PEM — paste full contents of fullchain.pem or cert.pem)</span>
+                                </label>
+                                <textarea class="form-control form-control-sm font-monospace" id="ssl_cert_content"
+                                    rows="5" spellcheck="false"
+                                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                            </div>
+                            <div>
+                                <label class="form-label small fw-semibold">
+                                    Private Key
+                                    <span class="text-muted fw-normal">(PEM — paste full contents of privkey.pem)</span>
+                                </label>
+                                <textarea class="form-control form-control-sm font-monospace" id="ssl_key_content"
+                                    rows="5" spellcheck="false"
+                                    placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="card-proxy" onclick="selectSsl('proxy')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-diagram-3 text-secondary fs-5"></i>
+                            <div>
+                                <strong>Behind a reverse proxy</strong>
+                                <div class="text-muted small">
+                                    Nginx, Caddy, or another proxy terminates HTTPS upstream.
+                                    ConfigLake runs on plain HTTP internally.
+                                    See <code>deploy/</code> for ready-to-use configs.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="opt-card" id="card-http" onclick="selectSsl('http')">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                            <div>
+                                <strong>HTTP only</strong>
+                                <span class="badge bg-danger ms-1" style="font-size:.67rem">Not safe for production</span>
+                                <div class="text-muted small">Secrets will travel unencrypted. Local development only.</div>
+                            </div>
+                        </div>
+                        <div id="http-confirm-wrap" style="display:none" class="mt-3">
+                            <div class="alert alert-danger py-2 small mb-2">
+                                <i class="bi bi-exclamation-octagon-fill"></i>
+                                <strong>Warning:</strong> Any secret can be intercepted on the network. Do not use in production.
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="chkHttpOk">
+                                <label class="form-check-label small" for="chkHttpOk">
+                                    I understand the risks — local development only
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="ssl-error" class="alert alert-danger py-2 small" style="display:none"></div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" id="ssl-back-btn"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-primary" id="ssl-next-btn">Next <i class="bi bi-arrow-right"></i></button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         FRESH — Step 4: Admin Account
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-fresh-admin" style="display:none">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-1">Admin Account</h5>
+            <p class="text-muted small mb-3">This account will have full access to ConfigLake.</p>
             <div class="mb-3">
-                <label class="form-label">Username</label>
-                <input type="text" class="form-control" id="inp-username" autocomplete="username" minlength="3">
+                <label class="form-label fw-semibold">Username</label>
+                <input type="text" class="form-control" id="username" autocomplete="username">
                 <div class="invalid-feedback" id="err-username"></div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" id="inp-email" autocomplete="email">
+                <label class="form-label fw-semibold">Email</label>
+                <input type="email" class="form-control" id="email" autocomplete="email">
                 <div class="invalid-feedback" id="err-email"></div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-control" id="inp-password" autocomplete="new-password" minlength="8">
+                <label class="form-label fw-semibold">Password</label>
+                <input type="password" class="form-control" id="password" autocomplete="new-password">
                 <div class="invalid-feedback" id="err-password"></div>
             </div>
-            <div class="mb-4">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" class="form-control" id="inp-confirm" autocomplete="new-password">
-                <div class="invalid-feedback" id="err-confirm"></div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Confirm Password</label>
+                <input type="password" class="form-control" id="confirm_password" autocomplete="new-password">
+                <div class="invalid-feedback" id="err-confirm_password"></div>
             </div>
+            <div id="fresh-submit-error" class="alert alert-danger py-2 small" style="display:none"></div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" onclick="showSsl('fresh', 3)"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-success" id="btnFreshComplete" onclick="submitSetup('fresh')">
+                <i class="bi bi-check2-circle"></i> Complete Setup
+                <span id="freshSpinner" class="spinner-border spinner-border-sm ms-1" style="display:none"></span>
+            </button>
+        </div>
+    </div>
 
-            <div id="alert-step2" class="alert alert-danger py-2" style="display:none"></div>
-
-            <div class="d-flex justify-content-between">
-                <button class="btn btn-outline-secondary" id="btn-back-2" type="button">
-                    <i class="bi bi-arrow-left"></i> Back
-                </button>
-                <button class="btn btn-primary" id="btn-submit" type="button">
-                    <span id="btn-submit-text">Create Account &amp; Finish Setup</span>
-                    <span id="btn-submit-spinner" class="spinner-border spinner-border-sm ms-1" style="display:none" role="status"></span>
-                </button>
+    <!-- ═══════════════════════════════════════════════
+         MIGRATION — Step 4: Review
+    ═══════════════════════════════════════════════ -->
+    <div class="card shadow-sm" id="card-mig-review" style="display:none">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-2">Review & Apply</h5>
+            <p class="text-muted small mb-3">Settings will be written to <code>.env</code>. The server needs a restart to apply them.</p>
+            <div id="mig-review-table" class="mb-3 small"></div>
+            <div class="alert alert-info small py-2 mb-3" id="mig-wrap-notice" style="display:none">
+                <i class="bi bi-info-circle"></i>
+                <strong>After setup:</strong> log in and go to <strong>Admin → Security Panel → Wrap All Keys</strong>
+                to apply envelope encryption to your existing environment keys.
             </div>
+            <div id="mig-submit-error" class="alert alert-danger py-2 small" style="display:none"></div>
+        </div>
+        <div class="card-footer d-flex justify-content-between bg-transparent">
+            <button class="btn btn-outline-secondary" onclick="showSsl('migration', 3)"><i class="bi bi-arrow-left"></i> Back</button>
+            <button class="btn btn-success" id="btnMigComplete" onclick="submitSetup('migration')">
+                <i class="bi bi-check2-circle"></i> Apply & Restart
+                <span id="migSpinner" class="spinner-border spinner-border-sm ms-1" style="display:none"></span>
+            </button>
         </div>
     </div>
 
@@ -178,131 +476,376 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    let masterKey = '';
+// ── State ─────────────────────────────────────────────────────────────────
+const S = {
+    type:         null,
+    masterKey:    '',
+    migKeySource: 'existing',
+    dbType:       'sqlite',
+    dbTestPassed: true,
+    sslMode:      'self-signed',
+};
 
-    // ── Key generation ──
-    document.getElementById('btn-generate').addEventListener('click', async () => {
-        const btn = document.getElementById('btn-generate');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating…';
+const FRESH_STEPS = ['Master Key', 'Database', 'HTTPS', 'Admin'];
+const MIG_STEPS   = ['Database', 'Master Key', 'HTTPS', 'Review'];
 
-        try {
-            const res = await fetch('/setup/generate-key', { method: 'POST' });
-            const data = await res.json();
-            masterKey = data.key;
-            document.getElementById('key-display').textContent = masterKey;
-            document.getElementById('key-section').style.display = 'block';
-            document.getElementById('chk-saved').checked = false;
-            document.getElementById('btn-next-1').disabled = true;
-        } catch {
-            showAlert('alert-step1', 'Failed to generate key. Please refresh and try again.');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Regenerate Key';
+// ── Helpers ───────────────────────────────────────────────────────────────
+function hideAll() {
+    document.querySelectorAll('.card').forEach(c => c.style.display = 'none');
+}
+function show(id) {
+    hideAll();
+    document.getElementById(id).style.display = 'block';
+}
+
+function buildBar(labels) {
+    const bar = document.getElementById('stepBar');
+    bar.style.display = 'flex';
+    bar.innerHTML = labels.map((lbl, i) => `
+        <div class="step-item" id="bar-${i+1}">
+            <div class="step-circle">${i+1}</div>
+            <div class="step-label">${lbl}</div>
+        </div>`).join('');
+}
+
+function updateBar(labels, current) {
+    const total = labels.length;
+    for (let i = 1; i <= total; i++) {
+        const item = document.getElementById(`bar-${i}`); if (!item) continue;
+        const circle = item.querySelector('.step-circle');
+        item.classList.remove('active','done');
+        if      (i < current) { item.classList.add('done');   circle.innerHTML = '<i class="bi bi-check2"></i>'; }
+        else if (i===current) { item.classList.add('active'); circle.textContent = String(i); }
+        else                  { circle.textContent = String(i); }
+    }
+}
+
+// ── Type selector ─────────────────────────────────────────────────────────
+function chooseType(t) {
+    S.type = t;
+    document.getElementById('type-fresh').classList.toggle('chosen', t==='fresh');
+    document.getElementById('type-migration').classList.toggle('chosen', t==='migration');
+    document.getElementById('btnTypeNext').disabled = false;
+}
+
+function startWizard() {
+    if (S.type === 'fresh') {
+        buildBar(FRESH_STEPS);
+        showFreshKey();
+    } else {
+        buildBar(MIG_STEPS);
+        showDb('migration', 1);
+    }
+}
+
+function backToType() {
+    hideAll();
+    document.getElementById('stepBar').style.display = 'none';
+    document.getElementById('card-type').style.display = 'block';
+    S.type = null;
+    ['type-fresh','type-migration'].forEach(id => document.getElementById(id).classList.remove('chosen'));
+    document.getElementById('btnTypeNext').disabled = true;
+}
+
+// ── Fresh flow ────────────────────────────────────────────────────────────
+function showFreshKey() { show('card-fresh-key'); updateBar(FRESH_STEPS, 1); }
+
+document.getElementById('btnGenKeyFresh').addEventListener('click', async function () {
+    this.disabled = true; this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+        const { key } = await (await fetch('/setup/generate-key', { method: 'POST' })).json();
+        S.masterKey = key;
+        const box = document.getElementById('keyDisplayFresh');
+        box.textContent = key; box.style.display = 'block';
+        document.getElementById('copyWrapFresh').style.display = 'block';
+        document.getElementById('ackWrapFresh').style.display  = 'block';
+        document.getElementById('keyWarningFresh').style.display = 'block';
+        document.getElementById('chkAckFresh').checked = false;
+        document.getElementById('btnFreshKeyNext').disabled = true;
+    } finally { this.disabled = false; this.innerHTML = '<i class="bi bi-key"></i> Regenerate'; }
+});
+document.getElementById('btnCopyKeyFresh').addEventListener('click', () => {
+    navigator.clipboard.writeText(S.masterKey).then(() => {
+        const b = document.getElementById('copiedBadgeFresh');
+        b.style.display = 'inline'; setTimeout(() => b.style.display = 'none', 2500);
+    });
+});
+document.getElementById('chkAckFresh').addEventListener('change', function () {
+    document.getElementById('btnFreshKeyNext').disabled = !(this.checked && S.masterKey);
+});
+document.getElementById('btnFreshKeyNext').addEventListener('click', () => showDb('fresh', 2));
+
+// ── Shared DB step ────────────────────────────────────────────────────────
+function showDb(flow, barStep) {
+    show('card-db');
+    updateBar(flow === 'fresh' ? FRESH_STEPS : MIG_STEPS, barStep);
+    document.getElementById('db-card-title').textContent = 'Database';
+    document.getElementById('db-card-desc').textContent  = flow === 'migration'
+        ? '' : 'Choose where ConfigLake stores its data.';
+    document.getElementById('db-mig-notice').style.display = flow === 'migration' ? 'block' : 'none';
+    document.getElementById('sqlite-upload-section').style.display =
+        (S.dbType === 'sqlite' && flow === 'migration') ? 'block' : 'none';
+
+    const backBtn = document.getElementById('db-back-btn');
+    const nextBtn = document.getElementById('db-next-btn');
+    backBtn.onclick = flow === 'fresh'
+        ? showFreshKey
+        : backToType;
+    nextBtn.onclick = function () {
+        if (S.dbType !== 'sqlite' && !S.dbTestPassed) {
+            const s = document.getElementById('dbTestStatus');
+            s.textContent = '✗ Test the connection before continuing.'; s.className = 'small text-danger'; return;
         }
-    });
+        if (flow === 'fresh') showSsl('fresh', 3);
+        else { show('card-mig-key'); updateBar(MIG_STEPS, 2); }
+    };
+}
 
-    document.getElementById('btn-copy').addEventListener('click', () => {
-        navigator.clipboard.writeText(masterKey).then(() => {
-            const btn = document.getElementById('btn-copy');
-            btn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
-            setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i> Copy to clipboard'; }, 2000);
+function selectDb(type) {
+    S.dbType = type; S.dbTestPassed = (type === 'sqlite');
+    ['sqlite','postgresql','mysql'].forEach(t =>
+        document.getElementById(`card-${t}`).classList.toggle('selected', t === type));
+    document.getElementById('sqlite-options').style.display   = type === 'sqlite' ? 'block' : 'none';
+    document.getElementById('remote-db-fields').style.display = type !== 'sqlite' ? 'block' : 'none';
+    document.getElementById('sqlite-upload-section').style.display =
+        (type === 'sqlite' && S.type === 'migration') ? 'block' : 'none';
+    if (type === 'postgresql') document.getElementById('db_port').value = '5432';
+    if (type === 'mysql')      document.getElementById('db_port').value = '3306';
+    document.getElementById('dbTestStatus').textContent = '';
+}
+
+async function testDbConnection() {
+    const btn = document.getElementById('btnTestDb');
+    const status = document.getElementById('dbTestStatus');
+    btn.disabled = true; status.textContent = 'Testing…'; status.className = 'small text-muted';
+    try {
+        const data = await (await fetch('/setup/test-db', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                db_type: S.dbType,
+                db_host: document.getElementById('db_host').value,
+                db_port: document.getElementById('db_port').value,
+                db_user: document.getElementById('db_user').value,
+                db_password: document.getElementById('db_password').value,
+                db_name: document.getElementById('db_name').value,
+            }),
+        })).json();
+        S.dbTestPassed = data.ok;
+        status.textContent = (data.ok ? '✓ ' : '✗ ') + data.message;
+        status.className   = `small ${data.ok ? 'text-success' : 'text-danger'}`;
+    } catch {
+        S.dbTestPassed = false; status.textContent = '✗ Network error.'; status.className = 'small text-danger';
+    } finally { btn.disabled = false; }
+}
+
+// ── Migration key step ────────────────────────────────────────────────────
+function selectMigKey(src) {
+    S.migKeySource = src;
+    document.getElementById('mig-key-existing').classList.toggle('selected', src === 'existing');
+    document.getElementById('mig-key-new').classList.toggle('selected',      src === 'new');
+    document.getElementById('mig-paste-key-wrap').style.display = src === 'existing' ? 'block' : 'none';
+    document.getElementById('mig-gen-key-wrap').style.display   = src === 'new'      ? 'block' : 'none';
+    document.getElementById('mig-key-error').style.display = 'none';
+}
+
+document.getElementById('btnGenKeyMig').addEventListener('click', async function () {
+    this.disabled = true; this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+        const { key } = await (await fetch('/setup/generate-key', { method: 'POST' })).json();
+        S.masterKey = key;
+        const box = document.getElementById('keyDisplayMig');
+        box.textContent = key; box.style.display = 'block';
+        document.getElementById('copyWrapMig').style.display = 'block';
+        document.getElementById('ackWrapMig').style.display  = 'block';
+        document.getElementById('chkAckMig').checked = false;
+    } finally { this.disabled = false; this.innerHTML = '<i class="bi bi-key"></i> Generate Key'; }
+});
+document.getElementById('btnCopyKeyMig').addEventListener('click', () => {
+    navigator.clipboard.writeText(S.masterKey).then(() => {
+        const b = document.getElementById('copiedBadgeMig');
+        b.style.display = 'inline'; setTimeout(() => b.style.display = 'none', 2500);
+    });
+});
+
+function validateMigKey() {
+    const errEl = document.getElementById('mig-key-error');
+    errEl.style.display = 'none';
+    if (S.migKeySource === 'existing') {
+        const val = document.getElementById('mig_existing_key').value.trim();
+        if (!val) { errEl.textContent = 'Paste your existing master key.'; errEl.style.display = 'block'; return; }
+        S.masterKey = val;
+    } else {
+        if (!S.masterKey) { errEl.textContent = 'Generate the key first.'; errEl.style.display = 'block'; return; }
+        if (!document.getElementById('chkAckMig').checked) {
+            errEl.textContent = 'Confirm you have saved the key before continuing.'; errEl.style.display = 'block'; return;
+        }
+    }
+    showSsl('migration', 3);
+}
+
+// ── Shared SSL step ───────────────────────────────────────────────────────
+function showSsl(flow, barStep) {
+    show('card-ssl');
+    updateBar(flow === 'fresh' ? FRESH_STEPS : MIG_STEPS, barStep);
+    document.getElementById('ssl-back-btn').onclick = flow === 'fresh'
+        ? () => showDb('fresh', 2)
+        : () => { show('card-mig-key'); updateBar(MIG_STEPS, 2); };
+    document.getElementById('ssl-next-btn').onclick = () => validateSslAndAdvance(flow);
+}
+
+function selectSsl(mode) {
+    S.sslMode = mode;
+    ['self-signed','manual','proxy','http'].forEach(m =>
+        document.getElementById(`card-${m}`).classList.toggle('selected', m === mode));
+    document.getElementById('manual-cert-fields').style.display = mode === 'manual' ? 'block' : 'none';
+    document.getElementById('http-confirm-wrap').style.display  = mode === 'http'   ? 'block' : 'none';
+    document.getElementById('ssl-error').style.display = 'none';
+}
+
+function validateSslAndAdvance(flow) {
+    const errEl = document.getElementById('ssl-error');
+    errEl.style.display = 'none';
+    if (S.sslMode === 'http' && !document.getElementById('chkHttpOk').checked) {
+        errEl.textContent = 'Please acknowledge the risks before continuing with HTTP only.';
+        errEl.style.display = 'block'; return;
+    }
+    if (S.sslMode === 'manual') {
+        const cert = document.getElementById('ssl_cert_content').value.trim();
+        const key  = document.getElementById('ssl_key_content').value.trim();
+        if (!cert || !key) {
+            errEl.textContent = 'Both certificate and private key are required.'; errEl.style.display = 'block'; return;
+        }
+        if (!cert.includes('-----BEGIN') || !key.includes('-----BEGIN')) {
+            errEl.textContent = 'Content does not look like PEM format. Paste the full file contents.'; errEl.style.display = 'block'; return;
+        }
+    }
+    if (flow === 'fresh') {
+        show('card-fresh-admin'); updateBar(FRESH_STEPS, 4);
+    } else {
+        buildMigReview(); show('card-mig-review'); updateBar(MIG_STEPS, 4);
+    }
+}
+
+function buildMigReview() {
+    const db  = { sqlite:'SQLite', postgresql:'PostgreSQL', mysql:'MySQL' }[S.dbType] || S.dbType;
+    const ssl = { 'self-signed':'Self-signed certificate', manual:'Manual certificate',
+                  proxy:'Behind reverse proxy', http:'HTTP only' }[S.sslMode] || S.sslMode;
+    const key = S.migKeySource === 'existing' ? 'Existing key (pasted)' : 'New key (generated)';
+    document.getElementById('mig-review-table').innerHTML = `
+        <table class="table table-sm table-borderless mb-0">
+            <tr><td class="text-muted" width="40%">Database</td><td><strong>${db}</strong></td></tr>
+            <tr><td class="text-muted">Master Key</td><td><strong>${key}</strong></td></tr>
+            <tr><td class="text-muted">HTTPS</td><td><strong>${ssl}</strong></td></tr>
+        </table>`;
+    document.getElementById('mig-wrap-notice').style.display = S.migKeySource === 'new' ? 'block' : 'none';
+}
+
+// ── SQLite DB file upload (migration only) ────────────────────────────────
+async function uploadDbFile() {
+    const fileInput = document.getElementById('sqlite-db-file');
+    const status    = document.getElementById('db-upload-status');
+    const btn       = document.getElementById('btnUploadDb');
+
+    if (!fileInput.files.length) {
+        status.textContent = 'Select a .db file first.'; status.className = 'small text-danger'; return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    status.textContent = 'Uploading…'; status.className = 'small text-muted';
+
+    const form = new FormData();
+    form.append('file', fileInput.files[0]);
+
+    try {
+        const res  = await fetch('/setup/upload-db', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('db_path').value = data.path;
+            status.innerHTML = `<i class="bi bi-check2 text-success"></i> Saved as <code>${data.filename}</code> — path auto-filled above.`;
+            status.className = 'small text-success';
+        } else {
+            status.textContent = '✗ ' + data.error; status.className = 'small text-danger';
+        }
+    } catch {
+        status.textContent = '✗ Upload failed.'; status.className = 'small text-danger';
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-upload"></i> Upload';
+    }
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────
+async function submitSetup(flow) {
+    const errId   = flow === 'fresh' ? 'fresh-submit-error' : 'mig-submit-error';
+    const spinner = flow === 'fresh' ? 'freshSpinner' : 'migSpinner';
+    const btn     = document.getElementById(flow === 'fresh' ? 'btnFreshComplete' : 'btnMigComplete');
+
+    if (flow === 'fresh') {
+        ['username','email','password','confirm_password'].forEach(f => {
+            document.getElementById(f).classList.remove('is-invalid');
+            document.getElementById(`err-${f}`).textContent = '';
         });
-    });
+    }
+    document.getElementById(errId).style.display = 'none';
+    btn.disabled = true;
+    document.getElementById(spinner).style.display = 'inline-block';
 
-    document.getElementById('chk-saved').addEventListener('change', e => {
-        document.getElementById('btn-next-1').disabled = !e.target.checked || !masterKey;
-    });
+    const payload = {
+        setup_type:        flow,
+        master_key:        S.masterKey,
+        master_key_source: S.migKeySource,
+        db_type:           S.dbType,
+        db_path:           document.getElementById('db_path').value.trim(),
+        db_host:           document.getElementById('db_host').value.trim(),
+        db_port:           document.getElementById('db_port').value.trim(),
+        db_user:           document.getElementById('db_user').value.trim(),
+        db_password:       document.getElementById('db_password').value,
+        db_name:           document.getElementById('db_name').value.trim(),
+        ssl_mode:          S.sslMode,
+        ssl_cert_content:  document.getElementById('ssl_cert_content').value.trim(),
+        ssl_key_content:   document.getElementById('ssl_key_content').value.trim(),
+    };
+    if (flow === 'fresh') {
+        Object.assign(payload, {
+            username:         document.getElementById('username').value.trim(),
+            email:            document.getElementById('email').value.trim(),
+            password:         document.getElementById('password').value,
+            confirm_password: document.getElementById('confirm_password').value,
+        });
+    }
 
-    // ── Step navigation ──
-    document.getElementById('btn-next-1').addEventListener('click', () => {
-        if (!masterKey) {
-            showAlert('alert-step1', 'Generate a key first.');
+    try {
+        const res  = await fetch('/setup/complete', {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            if (data.errors) {
+                Object.entries(data.errors).forEach(([field, msg]) => {
+                    const el = document.getElementById(field);
+                    if (el) { el.classList.add('is-invalid'); document.getElementById(`err-${field}`).textContent = msg; }
+                    else { const e = document.getElementById(errId); e.textContent = msg; e.style.display = 'block'; }
+                });
+            } else {
+                const e = document.getElementById(errId);
+                e.textContent = data.error || 'Setup failed — check server logs.'; e.style.display = 'block';
+            }
             return;
         }
-        goToStep(2);
-    });
-
-    document.getElementById('btn-back-2').addEventListener('click', () => goToStep(1));
-
-    function goToStep(n) {
-        document.querySelectorAll('.step-panel').forEach(el => el.classList.remove('active'));
-        document.getElementById(`step-${n}`).classList.add('active');
-
-        document.querySelectorAll('.progress-step').forEach((el, i) => {
-            el.classList.remove('active', 'done');
-            if (i + 1 < n)  el.classList.add('done');
-            if (i + 1 === n) el.classList.add('active');
+        const p = new URLSearchParams({
+            over_http: data.over_http        ? '1' : '0',
+            restart:   data.restart_required ? '1' : '0',
+            ssl_mode:  data.ssl_mode || 'http',
         });
-
-        // update badge styles
-        ['badge-2'].forEach((id, i) => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const stepNum = i + 2;
-            el.classList.remove('active', 'done', 'pending');
-            el.classList.add(stepNum < n ? 'done' : stepNum === n ? 'active' : 'pending');
-        });
+        window.location.href = `/setup/done?${p}`;
+    } catch (err) {
+        const e = document.getElementById(errId);
+        e.textContent = 'Network error: ' + err.message; e.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        document.getElementById(spinner).style.display = 'none';
     }
-
-    // ── Form submission ──
-    document.getElementById('btn-submit').addEventListener('click', async () => {
-        clearErrors();
-        const username = document.getElementById('inp-username').value.trim();
-        const email    = document.getElementById('inp-email').value.trim();
-        const password = document.getElementById('inp-password').value;
-        const confirm  = document.getElementById('inp-confirm').value;
-
-        setSubmitting(true);
-        try {
-            const res = await fetch('/setup/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ master_key: masterKey, username, email, password, confirm_password: confirm })
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                window.location.href = data.redirect;
-            } else if (res.status === 422 && data.errors) {
-                applyErrors(data.errors);
-            } else {
-                showAlert('alert-step2', data.error || 'Setup failed. Please try again.');
-            }
-        } catch {
-            showAlert('alert-step2', 'Network error. Please try again.');
-        } finally {
-            setSubmitting(false);
-        }
-    });
-
-    function setSubmitting(on) {
-        document.getElementById('btn-submit').disabled = on;
-        document.getElementById('btn-submit-spinner').style.display = on ? 'inline-block' : 'none';
-    }
-
-    function applyErrors(errors) {
-        const map = { username: 'inp-username', email: 'inp-email', password: 'inp-password', confirm_password: 'inp-confirm' };
-        for (const [field, msg] of Object.entries(errors)) {
-            const inputId = map[field];
-            if (inputId) {
-                const el = document.getElementById(inputId);
-                el.classList.add('is-invalid');
-                document.getElementById('err-' + field.replace('_password', '').replace('confirm', 'confirm')).textContent = msg;
-            }
-        }
-    }
-
-    function clearErrors() {
-        document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    }
-
-    function showAlert(id, msg) {
-        const el = document.getElementById(id);
-        el.textContent = msg;
-        el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 6000);
-    }
+}
 </script>
 </body>
 </html>

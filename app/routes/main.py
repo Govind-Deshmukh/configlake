@@ -245,6 +245,121 @@ def admin_import():
     })
 
 
+@main_bp.route('/admin/restart', methods=['POST'])
+@login_required
+def admin_restart():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    import threading
+    def _do():
+        import time
+        time.sleep(1.0)
+        os._exit(42)
+    threading.Thread(target=_do, daemon=False).start()
+    return jsonify({'ok': True})
+
+
+@main_bp.route('/admin/cert-info')
+@login_required
+def admin_cert_info():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    ssl_mode  = os.environ.get('SSL_MODE', '')
+    cert_path = os.environ.get('SSL_CERT_PATH', '')
+    return jsonify({
+        'ssl_mode':  ssl_mode,
+        'cert_path': cert_path,
+        'cert':      _read_cert_info(cert_path) if cert_path else None,
+    })
+
+
+@main_bp.route('/admin/generate-key', methods=['POST'])
+@login_required
+def admin_generate_key():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+    return jsonify({'key': EncryptionManager.generate_key()})
+
+
+@main_bp.route('/admin/renew-cert', methods=['POST'])
+@login_required
+def admin_renew_cert():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin required'}), 403
+
+    ssl_mode = os.environ.get('SSL_MODE', '')
+
+    if ssl_mode == 'self-signed':
+        from app.routes.setup import _generate_self_signed_cert
+        _generate_self_signed_cert()
+        return jsonify({
+            'ok': True,
+            'message': 'Self-signed certificate regenerated. Restart the server to apply it.',
+            'restart_required': True,
+        })
+
+    if ssl_mode == 'manual':
+        data         = request.get_json() or {}
+        cert_content = (data.get('cert_content') or '').strip()
+        key_content  = (data.get('key_content')  or '').strip()
+        if not cert_content or not key_content:
+            return jsonify({'error': 'Both certificate and private key are required.'}), 422
+        if '-----BEGIN' not in cert_content or '-----BEGIN' not in key_content:
+            return jsonify({'error': 'Content does not look like PEM format.'}), 422
+        from app.routes.setup import _save_cert_content
+        _save_cert_content(cert_content, key_content)
+        return jsonify({
+            'ok': True,
+            'message': 'Certificate updated. Restart the server to apply it.',
+            'restart_required': True,
+        })
+
+    return jsonify({'error': f'SSL mode is "{ssl_mode or "none"}" — certificate is managed externally.'}), 400
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+def _read_cert_info(cert_path: str):
+    """Return a dict of human-readable certificate fields, or {'error': ...}."""
+    try:
+        import datetime
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.x509.oid import ExtensionOID, NameOID
+
+        if not os.path.isfile(cert_path):
+            return None
+
+        with open(cert_path, 'rb') as f:
+            cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+        now            = datetime.datetime.utcnow()
+        days_remaining = (cert.not_valid_after - now).days
+
+        cn_list     = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        issuer_list = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
+
+        sans = []
+        try:
+            san_ext = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+            sans = [str(n) for n in san_ext.value]
+        except x509.ExtensionNotFound:
+            pass
+
+        return {
+            'subject_cn':     cn_list[0].value     if cn_list     else 'Unknown',
+            'issuer_cn':      issuer_list[0].value  if issuer_list else 'Unknown',
+            'not_before':     cert.not_valid_before.strftime('%Y-%m-%d %H:%M UTC'),
+            'not_after':      cert.not_valid_after.strftime('%Y-%m-%d %H:%M UTC'),
+            'days_remaining': days_remaining,
+            'is_self_signed': cert.subject == cert.issuer,
+            'sans':           sans,
+            'path':           cert_path,
+        }
+    except Exception as exc:
+        return {'error': str(exc)}
+
+
 def _update_env_file(key: str, value: str):
     """Write or update a single key in the root .env file."""
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')

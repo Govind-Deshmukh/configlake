@@ -9,7 +9,7 @@ from datetime import datetime
 
 def check_ip_whitelist(project_id, environment_id=None):
     """Check if the client IP is whitelisted for the project or environment."""
-    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR') or request.remote_addr
+    client_ip = request.remote_addr
     
     # Get allowed IPs for the project
     query = AllowedIP.query.filter_by(project_id=project_id)
