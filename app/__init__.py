@@ -114,13 +114,24 @@ def _auto_migrate(app):
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(db.engine)
-        columns = [col['name'] for col in inspector.get_columns('environment')]
-        if 'key_is_wrapped' not in columns:
+
+        env_cols = [col['name'] for col in inspector.get_columns('environment')]
+        if 'key_is_wrapped' not in env_cols:
             with db.engine.connect() as conn:
                 conn.execute(text(
                     'ALTER TABLE environment ADD COLUMN key_is_wrapped BOOLEAN NOT NULL DEFAULT 0'
                 ))
                 conn.commit()
             app.logger.info("DB migration: added 'key_is_wrapped' column.")
+
+        user_cols = [col['name'] for col in inspector.get_columns('user')]
+        if 'is_approved' not in user_cols:
+            with db.engine.connect() as conn:
+                # Existing users (including admins) are approved retroactively.
+                conn.execute(text(
+                    'ALTER TABLE "user" ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT 1'
+                ))
+                conn.commit()
+            app.logger.info("DB migration: added 'is_approved' column.")
     except Exception:
         pass  # Table doesn't exist yet — db.create_all() just ran or will handle it

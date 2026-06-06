@@ -9,12 +9,85 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h2>System Users</h2>
-                    <p class="text-muted">Manage all users in the Config Lake system</p>
+                    <p class="text-muted">Manage all users in the ConfigLake system</p>
                 </div>
                 <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Back to Dashboard
                 </a>
             </div>
+
+            <!-- Registration Toggle -->
+            <div class="card mb-4 border-{% if registration_enabled %}warning{% else %}secondary{% endif %}">
+                <div class="card-body d-flex align-items-center justify-content-between">
+                    <div>
+                        <h6 class="mb-1 fw-semibold">
+                            <i class="bi bi-person-plus me-1"></i> Open Registration
+                        </h6>
+                        <p class="text-muted small mb-0">
+                            {% if registration_enabled %}
+                                Anyone who can reach this server can create an account. New accounts still require approval before they can log in.
+                            {% else %}
+                                Registration is disabled. Only admins can onboard new users.
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge {% if registration_enabled %}bg-warning text-dark{% else %}bg-secondary{% endif %} fs-6">
+                            {% if registration_enabled %}Enabled{% else %}Disabled{% endif %}
+                        </span>
+                        <button class="btn btn-sm {% if registration_enabled %}btn-outline-danger{% else %}btn-outline-success{% endif %}"
+                                id="btn-toggle-registration">
+                            {% if registration_enabled %}Disable Registration{% else %}Enable Registration{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Approvals -->
+            {% if pending_users %}
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning bg-opacity-10 fw-semibold">
+                    <i class="bi bi-person-exclamation me-1"></i>
+                    Pending Approval ({{ pending_users|length }})
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Registered</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in pending_users %}
+                            <tr>
+                                <td><strong>{{ user.username }}</strong></td>
+                                <td>{{ user.email }}</td>
+                                <td><small class="text-muted">{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('main.approve_user', user_id=user.id) }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-check-lg"></i> Approve
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('main.reject_user', user_id=user.id) }}" class="d-inline ms-1">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                onclick="return confirm('Reject and delete {{ user.username }}?')">
+                                            <i class="bi bi-x-lg"></i> Reject
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- System Stats -->
             <div class="row mb-4">
@@ -234,6 +307,18 @@
 </div>
 
 <script>
+document.getElementById('btn-toggle-registration')?.addEventListener('click', async function () {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    try {
+        const res  = await fetch('/admin/toggle-registration', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        });
+        const data = await res.json();
+        if (res.ok) { location.reload(); }
+        else        { alert(data.error || 'Failed to toggle registration.'); }
+    } catch { alert('Network error.'); }
+});
+
 function deleteUser(userId, username, ownedProjects) {
     document.getElementById('deleteUsername').textContent = username;
     document.getElementById('deleteUserForm').action = "{{ url_for('main.delete_user', user_id=0) }}".replace('0', userId);

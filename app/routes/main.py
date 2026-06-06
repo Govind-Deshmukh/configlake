@@ -38,12 +38,13 @@ def admin_users():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('main.dashboard'))
-    
-    users = User.query.all()
-    
-    # Get user statistics
+
+    import os
+    pending_users = User.query.filter_by(is_approved=False).all()
+    approved_users = User.query.filter_by(is_approved=True).all()
+
     user_stats = []
-    for user in users:
+    for user in approved_users:
         project_count = ProjectUser.query.filter_by(user_id=user.id).count()
         owned_projects = ProjectUser.query.filter_by(user_id=user.id, role='owner').count()
         user_stats.append({
@@ -51,8 +52,53 @@ def admin_users():
             'project_count': project_count,
             'owned_projects': owned_projects
         })
-    
-    return render_template('admin/users.html', user_stats=user_stats)
+
+    registration_enabled = os.environ.get('REGISTRATION_ENABLED', 'false').lower() == 'true'
+    return render_template(
+        'admin/users.html',
+        user_stats=user_stats,
+        pending_users=pending_users,
+        registration_enabled=registration_enabled,
+    )
+
+@main_bp.route('/admin/users/<int:user_id>/approve', methods=['POST'])
+@login_required
+def approve_user(user_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    user = User.query.get_or_404(user_id)
+    user.is_approved = True
+    db.session.commit()
+    flash(f"User '{user.username}' approved and can now log in.", 'success')
+    return redirect(url_for('main.admin_users'))
+
+
+@main_bp.route('/admin/users/<int:user_id>/reject', methods=['POST'])
+@login_required
+def reject_user(user_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    user = User.query.get_or_404(user_id)
+    username = user.username
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"User '{username}' rejected and removed.", 'warning')
+    return redirect(url_for('main.admin_users'))
+
+
+@main_bp.route('/admin/toggle-registration', methods=['POST'])
+@login_required
+def toggle_registration():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    import os
+    current = os.environ.get('REGISTRATION_ENABLED', 'false').lower() == 'true'
+    new_value = 'false' if current else 'true'
+    os.environ['REGISTRATION_ENABLED'] = new_value
+    _update_env_file('REGISTRATION_ENABLED', new_value)
+    state = 'enabled' if new_value == 'true' else 'disabled'
+    return jsonify({'ok': True, 'registration_enabled': new_value == 'true', 'message': f'Registration {state}.'})
+
 
 @main_bp.route('/admin/users/<int:user_id>/toggle_admin', methods=['POST'])
 @login_required

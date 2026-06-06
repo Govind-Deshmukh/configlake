@@ -30,6 +30,9 @@ class Config:
 
     WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
 
+    # Registration is disabled by default — admin creates or approves users.
+    REGISTRATION_ENABLED = os.environ.get('REGISTRATION_ENABLED', 'false').lower() == 'true'
+
     # Master key for envelope encryption of per-environment keys.
     # Must be a valid Fernet key. Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # Store as an environment variable — never commit this value.
