@@ -258,7 +258,7 @@ def _build_db_uri(data):
 def _create_admin_orm(username, email, password):
     from app import db
     from app.models import User
-    user = User(username=username, email=email, is_admin=True)
+    user = User(username=username, email=email, is_admin=True, is_approved=True)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -276,11 +276,11 @@ def _init_remote_db(db_uri, username, email, password):
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     with engine.connect() as conn:
         conn.execute(text(
-            'INSERT INTO "user" (username, email, password_hash, is_admin, created_at) '
-            'VALUES (:username, :email, :password_hash, :is_admin, :created_at)'
+            'INSERT INTO "user" (username, email, password_hash, is_admin, is_approved, created_at) '
+            'VALUES (:username, :email, :password_hash, :is_admin, :is_approved, :created_at)'
         ), {
             'username': username, 'email': email,
-            'password_hash': password_hash, 'is_admin': True,
+            'password_hash': password_hash, 'is_admin': True, 'is_approved': True,
             'created_at': datetime.datetime.utcnow(),
         })
         conn.commit()

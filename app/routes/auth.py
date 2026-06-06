@@ -23,6 +23,9 @@ def login():
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
+            if not user.is_approved:
+                flash('Your account is pending admin approval. Please check back later.', 'warning')
+                return render_template('auth/login.html')
             login_user(user)
             next_page = request.args.get('next')
             if next_page:
@@ -39,48 +42,48 @@ def login():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
-    
+
+    # Check live env var so admin toggle takes effect without restart.
+    import os
+    registration_enabled = os.environ.get('REGISTRATION_ENABLED', 'false').lower() == 'true'
+    if not registration_enabled:
+        flash('Registration is currently disabled. Contact an administrator to get access.', 'error')
+        return redirect(url_for('auth.login'))
+
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        
+
         if not all([username, email, password, confirm_password]):
             flash('All fields are required', 'error')
             return render_template('auth/register.html')
-        
+
         if password != confirm_password:
             flash('Passwords do not match', 'error')
             return render_template('auth/register.html')
-        
+
         if len(password) < 8:
             flash('Password must be at least 8 characters long', 'error')
             return render_template('auth/register.html')
-        
-        # Check if user already exists
+
         existing_user = User.query.filter(
             (User.username == username) | (User.email == email)
         ).first()
-        
+
         if existing_user:
             flash('Username or email already exists', 'error')
             return render_template('auth/register.html')
-        
-        # Create new user
-        user = User(username=username, email=email)
+
+        user = User(username=username, email=email, is_approved=False)
         user.set_password(password)
-        
-        # First user becomes admin
-        if User.query.count() == 0:
-            user.is_admin = True
-        
         db.session.add(user)
         db.session.commit()
-        
-        flash('Registration successful! Please log in.', 'success')
+
+        flash('Account created. An administrator must approve it before you can log in.', 'warning')
         return redirect(url_for('auth.login'))
-    
+
     return render_template('auth/register.html')
 
 @auth_bp.route('/logout')
