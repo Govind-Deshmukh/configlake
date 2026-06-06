@@ -70,6 +70,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <form method="POST" action="{{ url_for('projects.delete_config', project_id=project.id, environment_id=environment.id, config_key=config.key) }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this configuration?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
@@ -118,6 +119,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <form method="POST" action="{{ url_for('projects.delete_secret', project_id=project.id, environment_id=environment.id, secret_key=secret.key) }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete this secret?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
@@ -289,6 +291,39 @@
     </div>
 </div>
 
+<!-- Token Created Modal (shown after successful creation) -->
+<div class="modal fade" id="tokenCreatedModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title"><i class="bi bi-check-circle-fill text-success"></i> Token Created</h5>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning py-2">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <strong>Copy this token now.</strong>
+                    It will not be shown again — there is no way to retrieve it later.
+                </div>
+                <label class="form-label fw-semibold">API Token</label>
+                <div class="input-group">
+                    <input type="text" class="form-control font-monospace" id="createdTokenValue" readonly>
+                    <button class="btn btn-outline-secondary" id="btnCopyToken" type="button">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                </div>
+                <div class="form-text mt-1">
+                    Use as: <code>Authorization: Bearer &lt;token&gt;</code>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="btnTokenDone">
+                    I've copied the token
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Manage IPs Modal -->
 <div class="modal fade" id="manageIpsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -339,32 +374,125 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1100"></div>
 
-// Handle token form submission
+<script>
+// ── Toast helper ──────────────────────────────────────────────────────────
+function showToast(message, type = 'success') {
+    const cfg = {
+        success: { bg: 'bg-success',   icon: 'bi-check-circle-fill' },
+        danger:  { bg: 'bg-danger',    icon: 'bi-exclamation-triangle-fill' },
+        warning: { bg: 'bg-warning text-dark', icon: 'bi-exclamation-circle-fill' },
+    };
+    const { bg, icon } = cfg[type] || { bg: 'bg-secondary', icon: 'bi-info-circle-fill' };
+
+    const el = document.createElement('div');
+    el.className = `toast align-items-center text-white ${bg} border-0`;
+    el.setAttribute('role', 'alert');
+    el.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body"><i class="bi ${icon} me-2"></i>${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>`;
+    document.getElementById('toastContainer').appendChild(el);
+    const toast = new bootstrap.Toast(el, { delay: type === 'danger' ? 6000 : 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+// ── Token creation ────────────────────────────────────────────────────────
 document.getElementById('tokenForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
     const name = document.getElementById('tokenName').value;
-    
     try {
-        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}`, {
+        const res  = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
-        
-        const data = await response.json();
-        if (response.ok) {
-            alert('Token created successfully!\n\nToken: ' + data.token + '\n\nThis will only be shown once. Copy it now!');
+        const data = await res.json();
+        if (res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('createTokenModal')).hide();
+            document.getElementById('tokenName').value = '';
+            document.getElementById('createdTokenValue').value = data.token;
+            new bootstrap.Modal(document.getElementById('tokenCreatedModal')).show();
+        } else {
+            showToast('Failed to create token: ' + data.error, 'danger');
+        }
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
+    }
+});
+
+document.getElementById('btnCopyToken')?.addEventListener('click', function() {
+    navigator.clipboard.writeText(document.getElementById('createdTokenValue').value).then(() => {
+        this.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+        setTimeout(() => { this.innerHTML = '<i class="bi bi-clipboard"></i> Copy'; }, 2000);
+    });
+});
+
+document.getElementById('btnTokenDone')?.addEventListener('click', function() {
+    bootstrap.Modal.getInstance(document.getElementById('tokenCreatedModal')).hide();
+    location.reload();
+});
+
+// ── Token toggle / revoke ─────────────────────────────────────────────────
+async function toggleToken(tokenId, isActive) {
+    const action = isActive ? 'deactivate' : 'activate';
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} this API token?`)) return;
+    try {
+        const res = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}/toggle`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+            showToast(`Token ${action}d.`);
+            setTimeout(() => location.reload(), 800);
+        } else {
+            const data = await res.json();
+            showToast(`Failed to ${action} token: ${data.error}`, 'danger');
+        }
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
+    }
+}
+
+async function revokeToken(tokenId, tokenName) {
+    if (!confirm(`Revoke token "${tokenName}"? This cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showToast('Token revoked.');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            const data = await res.json();
+            showToast('Failed to revoke token: ' + data.error, 'danger');
+        }
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
+    }
+}
+
+// ── Config form ───────────────────────────────────────────────────────────
+document.getElementById('configForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const key   = document.getElementById('configKey').value;
+    const value = document.getElementById('configValue').value;
+    try {
+        const res = await fetch(`/api/manage/config/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, value })
+        });
+        if (res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addConfigModal')).hide();
+            this.reset();
             location.reload();
         } else {
-            alert('Failed to create token: ' + data.error);
+            const data = await res.json();
+            showToast('Failed to save configuration: ' + (data.error || 'Unknown error'), 'danger');
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
     }
 });
 
@@ -374,50 +502,78 @@ function editConfig(key, value) {
     new bootstrap.Modal(document.getElementById('addConfigModal')).show();
 }
 
+// ── Secret form ───────────────────────────────────────────────────────────
+document.getElementById('secretForm')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const key   = document.getElementById('secretKey').value;
+    const value = document.getElementById('secretValue').value;
+    const inp   = document.getElementById('secretValue');
+
+    if (!value && inp.placeholder.includes('leave blank')) {
+        inp.classList.add('is-invalid');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/manage/secret/{{ project.id }}/{{ environment.name }}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, value })
+        });
+        if (res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addSecretModal')).hide();
+            this.reset();
+            inp.placeholder = 'This value will be encrypted and stored securely.';
+            inp.classList.remove('is-invalid');
+            location.reload();
+        } else {
+            const data = await res.json();
+            showToast('Failed to save secret: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
+    }
+});
+
 function editSecret(key) {
+    const inp = document.getElementById('secretValue');
     document.getElementById('secretKey').value = key;
-    document.getElementById('secretValue').value = '';
+    inp.value = '';
+    inp.placeholder = 'Enter new value (leave blank to keep current)';
+    inp.classList.remove('is-invalid');
     new bootstrap.Modal(document.getElementById('addSecretModal')).show();
 }
 
-// IP Management Functions
+// ── IP management ─────────────────────────────────────────────────────────
 document.getElementById('addIpForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-    
-    const ipAddress = document.getElementById('ipAddress').value;
+    const ipAddress   = document.getElementById('ipAddress').value;
     const description = document.getElementById('ipDescription').value;
-    
+    const csrfToken   = document.querySelector('meta[name="csrf-token"]').content;
     try {
-        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip`, {
+        const res = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                ip_address: ipAddress,
-                description: description || ''
-            })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+            body: new URLSearchParams({ ip_address: ipAddress, description: description || '' })
         });
-        
-        if (response.ok) {
+        if (res.ok) {
             loadCurrentIps();
-            document.getElementById('addIpForm').reset();
-            alert('IP added successfully!');
+            this.reset();
+            showToast('IP added successfully.');
         } else {
-            alert('Failed to add IP');
+            const data = await res.json();
+            showToast('Failed to add IP: ' + (data.error || 'Unknown error'), 'danger');
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
     }
 });
 
 async function loadCurrentIps() {
     try {
-        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ips`);
-        const data = await response.json();
-        
+        const res  = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ips`);
+        const data = await res.json();
         const container = document.getElementById('currentIps');
-        
         if (data.ips && data.ips.length > 0) {
             container.innerHTML = data.ips.map(ip => `
                 <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
@@ -428,170 +584,34 @@ async function loadCurrentIps() {
                     <button class="btn btn-outline-danger btn-sm" onclick="removeIp(${ip.id})">
                         <i class="bi bi-trash"></i>
                     </button>
-                </div>
-            `).join('');
+                </div>`).join('');
         } else {
             container.innerHTML = '<div class="text-muted">No environment-specific IPs configured.</div>';
         }
-    } catch (error) {
-        document.getElementById('currentIps').innerHTML = '<div class="text-danger">Failed to load IPs</div>';
+    } catch {
+        document.getElementById('currentIps').innerHTML = '<div class="text-danger">Failed to load IPs.</div>';
     }
 }
 
 async function removeIp(ipId) {
     if (!confirm('Remove this IP from the whitelist?')) return;
-    
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     try {
-        const response = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip/${ipId}`, {
-            method: 'DELETE'
+        const res = await fetch(`/projects/{{ project.id }}/environment/{{ environment.id }}/ip/${ipId}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken },
         });
-        
-        if (response.ok) {
+        if (res.ok) {
             loadCurrentIps();
-            alert('IP removed successfully!');
+            showToast('IP removed.');
         } else {
-            alert('Failed to remove IP');
+            showToast('Failed to remove IP.', 'danger');
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
+    } catch (err) {
+        showToast('Network error: ' + err.message, 'danger');
     }
 }
 
-// Load IPs when the modal is opened
-document.getElementById('manageIpsModal')?.addEventListener('show.bs.modal', function() {
-    loadCurrentIps();
-});
-
-// Token Management Functions
-async function toggleToken(tokenId, isActive) {
-    const action = isActive ? 'deactivate' : 'activate';
-    
-    if (!confirm(`Are you sure you want to ${action} this API token?`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}/toggle`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-        
-        if (response.ok) {
-            alert(`Token ${action}d successfully!`);
-            location.reload();
-        } else {
-            const data = await response.json();
-            alert(`Failed to ${action} token: ${data.error}`);
-        }
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-async function revokeToken(tokenId, tokenName) {
-    if (!confirm(`Are you sure you want to revoke the API token "${tokenName}"? This action cannot be undone.`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/manage/token/{{ project.id }}/{{ environment.id }}/${tokenId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            alert('Token revoked successfully!');
-            location.reload();
-        } else {
-            const data = await response.json();
-            alert(`Failed to revoke token: ${data.error}`);
-        }
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
-
-// Edit configuration function
-function editConfig(key, value) {
-    document.getElementById('configKey').value = key;
-    document.getElementById('configValue').value = value;
-    new bootstrap.Modal(document.getElementById('addConfigModal')).show();
-}
-
-// Edit secret function
-function editSecret(key) {
-    document.getElementById('secretKey').value = key;
-    document.getElementById('secretValue').value = '';
-    document.getElementById('secretValue').placeholder = 'Enter new value (leave blank to keep current)';
-    new bootstrap.Modal(document.getElementById('addSecretModal')).show();
-}
-
-// Improve form submission to close modals and reset forms
-document.getElementById('configForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const key = document.getElementById('configKey').value;
-    const value = document.getElementById('configValue').value;
-    
-    try {
-        const response = await fetch(`/api/manage/config/{{ project.id }}/{{ environment.name }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ key, value })
-        });
-        
-        if (response.ok) {
-            // Close modal and reset form
-            bootstrap.Modal.getInstance(document.getElementById('addConfigModal')).hide();
-            this.reset();
-            location.reload();
-        } else {
-            const data = await response.json();
-            alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
-
-// Override the existing secret form handler with better UX
-document.getElementById('secretForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const key = document.getElementById('secretKey').value;
-    const value = document.getElementById('secretValue').value;
-    
-    // Skip if value is empty and this is an edit (placeholder indicates edit mode)
-    if (!value && document.getElementById('secretValue').placeholder.includes('leave blank')) {
-        alert('Please enter a new value for the secret');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/manage/secret/{{ project.id }}/{{ environment.name }}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ key, value })
-        });
-        
-        if (response.ok) {
-            // Close modal and reset form
-            bootstrap.Modal.getInstance(document.getElementById('addSecretModal')).hide();
-            this.reset();
-            document.getElementById('secretValue').placeholder = 'This value will be encrypted and stored securely.';
-            location.reload();
-        } else {
-            const data = await response.json();
-            alert('Failed to save secret: ' + (data.error || 'Unknown error'));
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
+document.getElementById('manageIpsModal')?.addEventListener('show.bs.modal', loadCurrentIps);
 </script>
 {% endblock %}

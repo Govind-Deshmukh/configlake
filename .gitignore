@@ -261,6 +261,7 @@ migrate_db.py
 packages/
 instance/
 .claude/
+certs/
 
 # Note: Client libraries are maintained in separate repositories:
 # - Python: https://github.com/Govind-Deshmukh/configlake-python

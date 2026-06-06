@@ -1,10 +1,13 @@
 import json
 import zipfile
 import io
+import logging
 from datetime import datetime
 from app import db
 from app.models import Project, Environment, Config, Secret, ProjectUser, AllowedIP, User
 from app.utils.encryption import EncryptionManager
+
+logger = logging.getLogger(__name__)
 
 class BackupManager:
     @staticmethod
@@ -33,6 +36,7 @@ class BackupManager:
             env_data = {
                 'name': env.name,
                 'secret_key': env.secret_key,
+                'key_is_wrapped': env.key_is_wrapped,
                 'created_at': env.created_at.isoformat(),
                 'configs': [],
                 'secrets': []
@@ -137,7 +141,8 @@ class BackupManager:
                 environment = Environment(
                     name=env_data['name'],
                     project_id=project.id,
-                    secret_key=env_data['secret_key']
+                    secret_key=env_data['secret_key'],
+                    key_is_wrapped=env_data.get('key_is_wrapped', False)
                 )
                 db.session.add(environment)
                 db.session.flush()  # Get environment ID
@@ -224,3 +229,114 @@ class BackupManager:
             
         except Exception as e:
             raise ValueError(f"Failed to restore backup: {str(e)}")
+
+    # ── Admin-level full export / import ──────────────────────────────────
+
+    @staticmethod
+    def create_admin_export():
+        """Export every project as a JSON structure.
+
+        Secrets are kept in their encrypted-at-rest form.  The wrapped
+        environment keys are included but are useless without the master key,
+        so the file is safe to store as a backup.
+        """
+        projects = Project.query.all()
+        export = {
+            'version': '2.0',
+            'exported_at': datetime.utcnow().isoformat(),
+            'projects': [],
+        }
+
+        for project in projects:
+            proj_data = {
+                'name': project.name,
+                'description': project.description or '',
+                'environments': [],
+            }
+
+            for env in project.environments:
+                env_data = {
+                    'name': env.name,
+                    'secret_key': env.secret_key,
+                    'key_is_wrapped': env.key_is_wrapped,
+                    'configs': [
+                        {'key': c.key, 'value': c.value}
+                        for c in env.configs
+                    ],
+                    'secrets': [
+                        {'key': s.key, 'encrypted_value': s.encrypted_value}
+                        for s in env.secrets
+                    ],
+                }
+                proj_data['environments'].append(env_data)
+
+            export['projects'].append(proj_data)
+
+        return export
+
+    @staticmethod
+    def restore_admin_import(import_data, overwrite=False):
+        """Restore projects from an admin export.
+
+        Skips existing projects by default.  Pass overwrite=True to replace
+        them (environments are rebuilt from scratch; existing data is lost).
+
+        Returns a dict with 'created', 'skipped', and 'overwritten' lists.
+        """
+        if import_data.get('version') != '2.0':
+            raise ValueError(
+                f"Unsupported export version '{import_data.get('version')}'. Expected '2.0'."
+            )
+
+        results = {'created': [], 'skipped': [], 'overwritten': []}
+
+        for proj_data in import_data.get('projects', []):
+            existing = Project.query.filter_by(name=proj_data['name']).first()
+
+            if existing and not overwrite:
+                results['skipped'].append(proj_data['name'])
+                continue
+
+            if existing:
+                for env in list(existing.environments):
+                    db.session.delete(env)
+                db.session.flush()
+                project = existing
+                results['overwritten'].append(proj_data['name'])
+            else:
+                project = Project(
+                    name=proj_data['name'],
+                    description=proj_data.get('description', '')
+                )
+                db.session.add(project)
+                db.session.flush()
+                results['created'].append(proj_data['name'])
+
+            for env_data in proj_data.get('environments', []):
+                env = Environment(
+                    name=env_data['name'],
+                    project_id=project.id,
+                    secret_key=env_data['secret_key'],
+                    key_is_wrapped=env_data.get('key_is_wrapped', False),
+                )
+                db.session.add(env)
+                db.session.flush()
+
+                for c in env_data.get('configs', []):
+                    db.session.add(Config(
+                        key=c['key'], value=c['value'], environment_id=env.id
+                    ))
+
+                for s in env_data.get('secrets', []):
+                    db.session.add(Secret(
+                        key=s['key'],
+                        encrypted_value=s['encrypted_value'],
+                        environment_id=env.id,
+                    ))
+
+        db.session.commit()
+        logger.info(
+            "Admin import complete: created=%s overwritten=%s skipped=%s",
+            results['created'], results['overwritten'], results['skipped'],
+        )
+        return results

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Complete – ConfigLake</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .done-wrap { max-width: 580px; margin: 80px auto; padding: 0 16px; }
+    </style>
+</head>
+<body>
+<div class="done-wrap">
+    <div class="card shadow-sm">
+        <div class="card-body p-4 text-center">
+            <i class="bi bi-check-circle-fill text-success" style="font-size:3rem"></i>
+            <h4 class="fw-bold mt-3 mb-1">Setup complete!</h4>
+            <p class="text-muted mb-4">Settings saved. Restart the server to apply them.</p>
+
+            {% if ssl_mode == 'self-signed' %}
+            <div class="alert alert-info text-start mb-3">
+                <i class="bi bi-shield-check"></i>
+                <strong>Self-signed certificate generated</strong> and saved to <code>certs/</code>.
+                After restarting, your browser will show a one-time security warning —
+                click <strong>Advanced → Proceed</strong> to accept it.
+            </div>
+            {% elif ssl_mode == 'manual' %}
+            <div class="alert alert-info text-start mb-3">
+                <i class="bi bi-file-earmark-lock2"></i>
+                <strong>Your certificate has been saved.</strong>
+                HTTPS will be active after restart.
+            </div>
+            {% elif ssl_mode == 'proxy' %}
+            <div class="alert alert-info text-start mb-3">
+                <i class="bi bi-diagram-3"></i>
+                <strong>Proxy mode.</strong>
+                Ensure your reverse proxy terminates TLS before forwarding to ConfigLake.
+                See <code>deploy/</code> for ready-to-use Nginx / Caddy configs.
+            </div>
+            {% elif over_http %}
+            <div class="alert alert-danger text-start mb-3">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Running over HTTP.</strong>
+                Secrets transmitted in plaintext. Local development only.
+            </div>
+            {% endif %}
+
+            <div class="alert alert-light text-start border mb-4 small">
+                <i class="bi bi-info-circle"></i>
+                Settings written to <code>.env</code>.
+                For production, inject <code>CONFIGLAKE_MASTER_KEY</code> as an environment variable.
+            </div>
+
+            <!-- Restart section -->
+            <div id="restart-idle">
+                <button class="btn btn-warning btn-lg" onclick="restartServer()">
+                    <i class="bi bi-arrow-clockwise"></i> Restart Server
+                </button>
+            </div>
+
+            <div id="restart-progress" style="display:none">
+                <div class="mb-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+                <p class="fw-semibold mb-1" id="restart-heading">Restarting…</p>
+                <p class="text-muted small" id="restart-detail">Sending restart signal to server.</p>
+                <div class="progress mt-3" style="height:6px">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                         id="restart-progress-bar" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const SSL_MODE  = '{{ ssl_mode }}';
+const sslActive = SSL_MODE === 'self-signed' || SSL_MODE === 'manual';
+const baseUrl   = location.protocol + '//' + location.host;  // current scheme+host+port
+const httpsBase = 'https://' + location.hostname + (location.port ? ':' + location.port : '');
+const loginUrl  = (sslActive ? httpsBase : baseUrl) + '/auth/login';
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setStatus(heading, detail) {
+    document.getElementById('restart-heading').textContent = heading;
+    document.getElementById('restart-detail').textContent  = detail;
+}
+
+function animateBar(from, to, ms) {
+    const bar = document.getElementById('restart-progress-bar');
+    const steps = 20, step = (to - from) / steps;
+    let cur = from;
+    const iv = setInterval(() => {
+        cur += step; bar.style.width = Math.min(cur, to) + '%';
+        if (cur >= to) clearInterval(iv);
+    }, ms / steps);
+}
+
+async function restartServer() {
+    document.getElementById('restart-idle').style.display     = 'none';
+    document.getElementById('restart-progress').style.display = 'block';
+
+    setStatus('Sending restart signal…', 'Telling the server to stop.');
+    animateBar(0, 20, 800);
+
+    try { await fetch('/setup/restart', { method: 'POST' }); } catch { /* connection closes — expected */ }
+
+    animateBar(20, 60, 2500);
+    setStatus('Server is restarting…', 'The supervisor is starting a fresh process.');
+    await sleep(2500);
+
+    if (sslActive) {
+        // After SSL restart the new server is on HTTPS with a self-signed cert.
+        // fetch() will throw a cert error that looks identical to "server still down",
+        // so we cannot auto-detect. Instead wait a few more seconds then show a button.
+        animateBar(60, 95, 2500);
+        setStatus('Almost ready…', 'Waiting for the HTTPS server to bind.');
+        await sleep(2500);
+        animateBar(95, 100, 300);
+        showSslReadyMessage();
+    } else {
+        await pollUntilUp();
+    }
+}
+
+async function pollUntilUp() {
+    const deadline = Date.now() + 40_000;
+    let attempt = 0;
+    while (Date.now() < deadline) {
+        await sleep(1500);
+        attempt++;
+        setStatus('Waiting for server…', `Checking… (attempt ${attempt})`);
+        animateBar(60, Math.min(60 + attempt * 5, 94), 1000);
+        try {
+            const res = await fetch(loginUrl, { method: 'HEAD' });
+            if (res.ok || res.status < 500) { onServerUp(); return; }
+        } catch { /* still down */ }
+    }
+    showTimeoutMessage();
+}
+
+function onServerUp() {
+    animateBar(94, 100, 300);
+    setStatus('Server is back!', 'Redirecting…');
+    setTimeout(() => { window.location.href = loginUrl; }, 600);
+}
+
+function showSslReadyMessage() {
+    document.getElementById('restart-progress').innerHTML = `
+        <div class="alert alert-success text-start mb-3">
+            <i class="bi bi-shield-check fs-4"></i>
+            <strong> HTTPS server is ready.</strong>
+        </div>
+        <p class="text-muted small mb-3">
+            Your browser will show a <strong>security warning</strong> for the self-signed certificate.<br>
+            Click <strong>Advanced → Proceed to ${location.hostname}</strong> to accept it.
+        </p>
+        <a href="${loginUrl}" class="btn btn-primary btn-lg">
+            <i class="bi bi-box-arrow-in-right"></i> Open HTTPS Login
+        </a>`;
+}
+
+function showTimeoutMessage() {
+    document.getElementById('restart-progress').innerHTML = `
+        <div class="alert alert-warning text-start">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong>Server didn't respond in 40 s.</strong><br>
+            Restart it manually in your terminal, then come back here.
+            <div class="font-monospace small bg-light border rounded px-2 py-1 mt-2">python3 app.py</div>
+        </div>
+        <a href="${loginUrl}" class="btn btn-outline-primary mt-3">
+            <i class="bi bi-box-arrow-in-right"></i> Try Login
+        </a>`;
+}
+</script>
+</body>
+</html>

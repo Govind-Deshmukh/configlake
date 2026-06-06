@@ -27,7 +27,11 @@ class Config:
         SQLALCHEMY_DATABASE_URI = f'postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DB}'
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # Encryption key for secrets
-    ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or 'generate-a-32-byte-key-for-production'
+
+    WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
+
+    # Master key for envelope encryption of per-environment keys.
+    # Must be a valid Fernet key. Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Store as an environment variable — never commit this value.
+    CONFIGLAKE_MASTER_KEY = os.environ.get('CONFIGLAKE_MASTER_KEY')
     

@@ -20,6 +20,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('projects.add_user', project_id=project.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
@@ -216,6 +217,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form method="POST" id="removeUserForm" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger">Remove User</button>
                 </form>
             </div>
@@ -238,6 +240,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form method="POST" id="changeRoleForm" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="role" id="newRole">
                     <button type="submit" class="btn btn-primary">Change Role</button>
                 </form>

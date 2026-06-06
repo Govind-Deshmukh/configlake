@@ -138,6 +138,7 @@
                                                 <ul class="dropdown-menu">
                                                     <li>
                                                         <form method="POST" action="{{ url_for('main.toggle_admin', user_id=user.id) }}" style="display: inline;">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                             <button type="submit" class="dropdown-item">
                                                                 {% if user.is_admin %}
                                                                     <i class="fas fa-user-minus text-warning me-2"></i> Revoke Admin
@@ -222,6 +223,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form method="POST" id="deleteUserForm" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger">
                         <i class="fas fa-trash me-2"></i> Delete User
                     </button>
