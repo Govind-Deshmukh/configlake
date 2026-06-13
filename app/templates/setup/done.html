@@ -61,14 +61,8 @@
             </div>
 
             <div id="restart-progress" style="display:none">
-                <div class="mb-3">
-                    <div class="spinner-border text-primary" role="status"></div>
-                </div>
-                <p class="fw-semibold mb-1" id="restart-heading">Restarting…</p>
-                <p class="text-muted small" id="restart-detail">Sending restart signal to server.</p>
-                <div class="progress mt-3" style="height:6px">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
-                         id="restart-progress-bar" style="width:0%"></div>
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Restarting…</span>
                 </div>
             </div>
         </div>
@@ -84,42 +78,24 @@ const loginUrl  = (sslActive ? httpsBase : baseUrl) + '/auth/login';
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function setStatus(heading, detail) {
-    document.getElementById('restart-heading').textContent = heading;
-    document.getElementById('restart-detail').textContent  = detail;
-}
-
-function animateBar(from, to, ms) {
-    const bar = document.getElementById('restart-progress-bar');
-    const steps = 20, step = (to - from) / steps;
-    let cur = from;
-    const iv = setInterval(() => {
-        cur += step; bar.style.width = Math.min(cur, to) + '%';
-        if (cur >= to) clearInterval(iv);
-    }, ms / steps);
-}
-
 async function restartServer() {
     document.getElementById('restart-idle').style.display     = 'none';
     document.getElementById('restart-progress').style.display = 'block';
 
-    setStatus('Sending restart signal…', 'Telling the server to stop.');
-    animateBar(0, 20, 800);
-
-    try { await fetch('/setup/restart', { method: 'POST' }); } catch { /* connection closes — expected */ }
-
-    animateBar(20, 60, 2500);
-    setStatus('Server is restarting…', 'The supervisor is starting a fresh process.');
-    await sleep(2500);
+    try {
+        const r = await fetch('/setup/restart', { method: 'POST' });
+        if (!r.ok) {
+            const body = await r.json().catch(() => ({}));
+            showErrorMessage(body.error || `Server returned ${r.status}`);
+            return;
+        }
+    } catch { /* connection closes on exit — also expected */ }
 
     if (sslActive) {
         // After SSL restart the new server is on HTTPS with a self-signed cert.
-        // fetch() will throw a cert error that looks identical to "server still down",
-        // so we cannot auto-detect. Instead wait a few more seconds then show a button.
-        animateBar(60, 95, 2500);
-        setStatus('Almost ready…', 'Waiting for the HTTPS server to bind.');
-        await sleep(2500);
-        animateBar(95, 100, 300);
+        // fetch() throws a cert error indistinguishable from "server still down",
+        // so wait a fixed window then show a manual button.
+        await sleep(5000);
         showSslReadyMessage();
     } else {
         await pollUntilUp();
@@ -128,24 +104,14 @@ async function restartServer() {
 
 async function pollUntilUp() {
     const deadline = Date.now() + 40_000;
-    let attempt = 0;
     while (Date.now() < deadline) {
         await sleep(1500);
-        attempt++;
-        setStatus('Waiting for server…', `Checking… (attempt ${attempt})`);
-        animateBar(60, Math.min(60 + attempt * 5, 94), 1000);
         try {
             const res = await fetch(loginUrl, { method: 'HEAD' });
-            if (res.ok || res.status < 500) { onServerUp(); return; }
+            if (res.ok || res.status < 500) { window.location.href = loginUrl; return; }
         } catch { /* still down */ }
     }
     showTimeoutMessage();
-}
-
-function onServerUp() {
-    animateBar(94, 100, 300);
-    setStatus('Server is back!', 'Redirecting…');
-    setTimeout(() => { window.location.href = loginUrl; }, 600);
 }
 
 function showSslReadyMessage() {
@@ -160,6 +126,19 @@ function showSslReadyMessage() {
         </p>
         <a href="${loginUrl}" class="btn btn-primary btn-lg">
             <i class="bi bi-box-arrow-in-right"></i> Open HTTPS Login
+        </a>`;
+}
+
+function showErrorMessage(msg) {
+    document.getElementById('restart-progress').innerHTML = `
+        <div class="alert alert-danger text-start">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong>Restart failed.</strong> ${msg}<br>
+            <span class="small">Restart the server manually, then open the login page.</span>
+            <div class="font-monospace small bg-light border rounded px-2 py-1 mt-2">python3 app.py</div>
+        </div>
+        <a href="${loginUrl}" class="btn btn-outline-primary mt-3">
+            <i class="bi bi-box-arrow-in-right"></i> Try Login
         </a>`;
 }
 

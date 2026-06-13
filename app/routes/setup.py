@@ -3,7 +3,7 @@ import ipaddress
 import logging
 import os
 
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from app.utils.encryption import EncryptionManager
 
@@ -109,8 +109,15 @@ def complete():
     ssl_cert_path = ''
     ssl_key_path  = ''
     if ssl_mode == 'self-signed':
+        cert_cn       = (data.get('cert_cn') or 'ConfigLake').strip()
+        cert_org      = (data.get('cert_org') or '').strip()
+        cert_ou       = (data.get('cert_ou') or '').strip()
+        cert_validity = max(1, min(int(data.get('cert_validity_years') or 1), 5))
         try:
-            ssl_cert_path, ssl_key_path = _generate_self_signed_cert()
+            ssl_cert_path, ssl_key_path = _generate_self_signed_cert(
+                cn=cert_cn, org=cert_org, ou=cert_ou,
+                validity_days=cert_validity * 365,
+            )
         except Exception as exc:
             return jsonify({'errors': {'ssl': f'Could not generate certificate: {exc}'}}), 500
     elif ssl_mode == 'manual':
@@ -172,6 +179,7 @@ def complete():
         return jsonify({'error': f'Database initialisation failed: {exc}'}), 500
 
     logger.info("Setup completed (type=%s, db=%s, ssl=%s).", setup_type, db_type, ssl_mode)
+    session['setup_restart_token'] = True  # authorises exactly one restart via /setup/restart
     return jsonify({
         'ok': True,
         'over_http': request.scheme == 'http' and ssl_mode == 'http',
@@ -213,10 +221,12 @@ def restart():
     We exit with code 42 — the supervisor loop in app.py detects this,
     waits for the port to be released, then relaunches a fresh child.
     This avoids the 'Address already in use' race that os.execv causes.
+
+    Requires the one-time session token set by /setup/complete so that
+    random unauthenticated requests cannot trigger a restart after setup.
     """
-    err = _setup_only()
-    if err:
-        return err
+    if not session.pop('setup_restart_token', False):
+        return jsonify({'error': 'Not authorised'}), 403
     import threading
 
     def _do():
@@ -321,7 +331,7 @@ def _save_cert_content(cert_pem: str, key_pem: str):
     return cert_path, key_path
 
 
-def _generate_self_signed_cert():
+def _generate_self_signed_cert(cn='ConfigLake', org='', ou='', validity_days=3650):
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -333,15 +343,22 @@ def _generate_self_signed_cert():
     cert_path = os.path.join(certs_dir, 'cert.pem')
     key_path  = os.path.join(certs_dir, 'key.pem')
 
+    name_attrs = [x509.NameAttribute(NameOID.COMMON_NAME, cn)]
+    if org:
+        name_attrs.append(x509.NameAttribute(NameOID.ORGANIZATION_NAME, org))
+    if ou:
+        name_attrs.append(x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, ou))
+    name = x509.Name(name_attrs)
+
     key  = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'ConfigLake')])
+    now  = datetime.datetime.utcnow()
     cert = (
         x509.CertificateBuilder()
         .subject_name(name).issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.datetime.utcnow())
-        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=validity_days))
         .add_extension(x509.SubjectAlternativeName([
             x509.DNSName('localhost'),
             x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),

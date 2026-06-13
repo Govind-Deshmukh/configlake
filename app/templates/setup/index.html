@@ -329,6 +329,31 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="self-signed-fields" class="mt-3 pt-3 border-top">
+                            <p class="small text-muted mb-2">Certificate details <span class="text-muted fw-normal">(O and OU are optional)</span></p>
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold mb-1">Common Name (CN)</label>
+                                    <input type="text" class="form-control form-control-sm" id="cert_cn"
+                                           value="ConfigLake" placeholder="e.g. ConfigLake or myserver.local">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-semibold mb-1">Organisation (O)</label>
+                                    <input type="text" class="form-control form-control-sm" id="cert_org"
+                                           placeholder="e.g. Acme Corp">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-semibold mb-1">Organisational Unit (OU)</label>
+                                    <input type="text" class="form-control form-control-sm" id="cert_ou"
+                                           placeholder="e.g. IT Department">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="form-label small fw-semibold mb-1">Valid for (years)</label>
+                                    <input type="number" class="form-control form-control-sm" id="cert_validity_years"
+                                           value="1" min="1" max="5">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="col-12">
@@ -697,8 +722,9 @@ function selectSsl(mode) {
     S.sslMode = mode;
     ['self-signed','manual','proxy','http'].forEach(m =>
         document.getElementById(`card-${m}`).classList.toggle('selected', m === mode));
-    document.getElementById('manual-cert-fields').style.display = mode === 'manual' ? 'block' : 'none';
-    document.getElementById('http-confirm-wrap').style.display  = mode === 'http'   ? 'block' : 'none';
+    document.getElementById('self-signed-fields').style.display = mode === 'self-signed' ? 'block' : 'none';
+    document.getElementById('manual-cert-fields').style.display = mode === 'manual'      ? 'block' : 'none';
+    document.getElementById('http-confirm-wrap').style.display  = mode === 'http'        ? 'block' : 'none';
     document.getElementById('ssl-error').style.display = 'none';
 }
 
@@ -801,9 +827,13 @@ async function submitSetup(flow) {
         db_user:           document.getElementById('db_user').value.trim(),
         db_password:       document.getElementById('db_password').value,
         db_name:           document.getElementById('db_name').value.trim(),
-        ssl_mode:          S.sslMode,
-        ssl_cert_content:  document.getElementById('ssl_cert_content').value.trim(),
-        ssl_key_content:   document.getElementById('ssl_key_content').value.trim(),
+        ssl_mode:              S.sslMode,
+        ssl_cert_content:      document.getElementById('ssl_cert_content').value.trim(),
+        ssl_key_content:       document.getElementById('ssl_key_content').value.trim(),
+        cert_cn:               document.getElementById('cert_cn').value.trim(),
+        cert_org:              document.getElementById('cert_org').value.trim(),
+        cert_ou:               document.getElementById('cert_ou').value.trim(),
+        cert_validity_years:   document.getElementById('cert_validity_years').value,
     };
     if (flow === 'fresh') {
         Object.assign(payload, {
