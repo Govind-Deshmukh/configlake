@@ -156,24 +156,15 @@ def complete():
                 _create_admin_orm(username, email, password)
             else:
                 restart_required = True
+                _write_env('DATABASE_URL', db_uri)
                 _init_remote_db(db_uri, username, email, password)
         else:
-            # Migration: create/upgrade schema only, no admin creation
+            # Migration: point the app at the correct DB and upgrade its schema.
+            # Always write DATABASE_URL — for SQLite this ensures the app connects
+            # to the uploaded file after restart, not the default config_manager.db.
             restart_required = True
-            if db_type == 'sqlite':
-                from app import db
-                from sqlalchemy import inspect, text
-                db.create_all()
-                inspector = inspect(db.engine)
-                cols = [c['name'] for c in inspector.get_columns('environment')]
-                if 'key_is_wrapped' not in cols:
-                    with db.engine.connect() as conn:
-                        conn.execute(text(
-                            'ALTER TABLE environment ADD COLUMN key_is_wrapped BOOLEAN NOT NULL DEFAULT 0'
-                        ))
-                        conn.commit()
-            else:
-                _migrate_remote_db(db_uri)
+            _write_env('DATABASE_URL', db_uri)
+            _migrate_remote_db(db_uri)
     except Exception as exc:
         logger.exception('Setup DB init failed.')
         return jsonify({'error': f'Database initialisation failed: {exc}'}), 500
